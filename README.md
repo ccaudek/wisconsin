@@ -1,2 +1,2 @@
-# wisconsin
-Materials for the WCST, PRL, and task switching project
+# project_template
+A project structure for doing and sharing data science work inspired by Cookiecutter Data Science

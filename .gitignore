@@ -1,3 +1,6 @@
+# Ignore mcmc traces
+src/data/*
+
 # History files
 .Rhistory
 .Rapp.history
