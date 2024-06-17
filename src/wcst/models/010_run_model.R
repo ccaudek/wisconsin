@@ -26,15 +26,15 @@ stan_data <- readRDS(
 
 
 # chose model
-file <- file.path("src", "models", "stan", "01_AU_rpdi_bis.stan") 
-file <- file.path("src", "models", "stan", "02_AU_1pd1.stan") 
-file <- file.path("src", "models", "stan", "03_MBRL.stan") 
-file <- file.path("src", "models", "stan", "04_PRL.stan") 
-file <- file.path("src", "models", "stan", "05_MBRL_without_inertia.stan") #
-file <- file.path("src", "models", "stan", "06_PRL_without_inertia.stan")
-file <- file.path("src", "models", "stan", "07_PRL_weighting.stan") 
-file <- file.path("src", "models", "stan", "07bis_PRL_weighting.stan") 
-file <- file.path("src", "models", "stan", "08_PRL_weighting_without_inertia.stan") 
+file <- file.path("src", "wcst", "models", "stan", "01_AU_rpdi_bis.stan") 
+file <- file.path("src", "wcst", "models", "stan", "02_AU_1pd1.stan") 
+file <- file.path("src", "wcst", "models", "stan", "03_MBRL.stan") 
+file <- file.path("src", "wcst", "models", "stan", "04_PRL.stan") 
+file <- file.path("src", "wcst", "models", "stan", "05_MBRL_without_inertia.stan") #
+file <- file.path("src", "wcst", "models", "stan", "06_PRL_without_inertia.stan")
+file <- file.path("src", "wcst", "models", "stan", "07_PRL_weighting.stan") 
+file <- file.path("src", "wcst", "models", "stan", "07bis_PRL_weighting.stan") 
+file <- file.path("src", "wcst", "models", "stan", "08_PRL_weighting_without_inertia.stan") 
 
 
 # Parmeters of interest
@@ -97,16 +97,36 @@ mod$format(canonicalize = list("deprecations"), overwrite_file = TRUE)
 # compile model
 mod <- cmdstan_model(file)
 
-# mod$print()
+mod$print()
 # mod$exe_file()
 
 fit_mcmc <- mod$sample(
   data = stan_data,
-  seed = 12345,
+  seed = 1234,
   chains = 4,
   parallel_chains = 4,
   refresh = 50 # print update every 500 iters
 )
+
+draws <- fit_mcmc$draws(variables = params_mod7, format = "data.frame")
+
+
+# Trasforma i dati in un formato lungo per facilitare il calcolo delle medie per soggetto
+draws_long <- draws %>%
+  pivot_longer(cols = starts_with("mu_"), names_to = "parameter", values_to = "value")
+
+
+# Estrai l'indice del soggetto da ogni parametro e calcola la media
+draws_long <- draws_long %>%
+  mutate(subject = stringr::str_extract(parameter, "\\[\\d+\\]") %>% stringr::str_remove_all("\\[|\\]"),
+         parameter = stringr::str_remove(parameter, "\\[\\d+\\]")) %>%
+  group_by(subject, parameter) %>%
+  summarise(mean_value = mean(value, na.rm = TRUE), .groups = 'drop')
+
+print(draws_long)
+
+dim(draws_long)
+
 
 # fit_mcmc <- readRDS(
 #   here::here("src", "traces", "fit_wcst_mcmc.rds")
@@ -122,8 +142,6 @@ fit_mcmc$summary(
 )
 
 
-
-
 # Model 8, patients
 # variable   mean median    sd    mad      q5    q95   q2.75  q97.5
 # 1 mu_p[1]   2.48   2.43  0.492 0.463   1.77    3.37   1.67    3.61 
@@ -137,10 +155,15 @@ fit_mcmc$summary(
 # Obtain a posterior mode (penalized maximum likelihood) estimate.
 # fit_mle <- mod$optimize(data = data_list, seed = 123)
 
+
+
 params_mod <- params_mod7bis # <------------ Change this for each of the 8 models.
 
 res_mcmc <- fit_mcmc$summary(params_mod) 
-res_mcmc %>% as.data.frame()
+traces_df <- res_mcmc %>% as.data.frame()
+
+traces_df <- traces_df[!grepl("y_pred", traces_df$variable), ]
+traces_df <- traces_df[!grepl("log_lik", traces_df$variable), ]
 
 # variable         mean       median           sd          mad           q5
 # 1    mu_MB_Arew[1] 0.5105776908 0.4641085000 0.1998476209 0.1464727257 2.605691e-01

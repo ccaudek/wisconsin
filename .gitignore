@@ -1,13 +1,9 @@
-# Ignore mcmc traces
-src/data/*
-
 # History files
 .Rhistory
 .Rapp.history
 
 # Session Data files
 .RData
-.RDataTmp
 
 # User-specific files
 .Ruserdata
@@ -23,8 +19,9 @@ src/data/*
 
 # RStudio files
 .Rproj.user/
+.Rproj.user/*
 
-# produced vignettes
+# Produced vignettes
 vignettes/*.html
 vignettes/*.pdf
 
@@ -33,20 +30,50 @@ vignettes/*.pdf
 
 # knitr and R markdown default cache directories
 *_cache/
-/cache/
+cache/
 
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
 
-# R Environment Variables
-.Renviron
-
-# pkgdown site
-docs/
-
-# translation temp files
-po/*~
-
-# RStudio Connect folder
+# Shiny application logs
+shinyapps.io/
 rsconnect/
+
+# Microsoft Visual Studio Code files
+.vscode/
+
+# Data files
+*.csv
+*.tsv
+*.txt
+*.xlsx
+*.xls
+
+# Logs
+*.log
+
+# Hidden files (MacOS)
+.DS_Store
+.DS_Store?
+
+# Compiled code
+*.o
+*.so
+*.dll
+*.a
+*.lib
+
+# Documentation files
+docs/
+site/
+
+# Package builds
+*.tar.gz
+*.zip
+
+# Miscellaneous
+*.swp
+*.bak
+*.tmp
+

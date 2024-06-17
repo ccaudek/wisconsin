@@ -1,4 +1,4 @@
-# Script name: 001_gen_data_for_hddmrl_food_neutral.R
+# Script name: 001_gen_input_hddm_stim.R
 # Project: WCST
 # Script purpose: create single file with all raw PRL data.
 # @author: Corrado Caudek <corrado.caudek@unifi.it>
@@ -81,6 +81,10 @@ prl_dat <- readRDS(
   here::here(
     "data", "processed", "prl", "raw_prl_data", "prl_tot_raw_data.rds")
   )
+
+length(unique(prl_dat$subj_name))
+# [1] 338
+
 
 # Data cleaning ----------
 

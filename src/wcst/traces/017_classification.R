@@ -28,7 +28,7 @@ suppressPackageStartupMessages({
   library("tidymodels")  
   library("stringr")
   # Helper packages
-  library("readr") # for importing data
+  library("readr")       # for importing data
   library("tidyr")
   library("vip") 
   library("pROC")
@@ -41,99 +41,87 @@ options(max.print = .Machine$integer.max)
 cores <- parallel::detectCores()
 cores
 
-# source(here("code", "functions", "funs_prl.R"))
-# source(here("code", "functions", "funs_quest.R"))
-# source(here("code", "functions", "funs_rescorla_wagner.R"))
-# source(here("code", "functions", "funs_careless_resp.R"))
-# source(here("code", "functions", "funs_gen_data_for_hddm.R"))
-# 
-# source(here("code", "functions", "funs_param_analyses.R"))
-# source(here("code", "functions", "funs_param_classification_analyses.R"))
-
-# Get traces estimated without distinguishing the parameters' estimates 
-# by group.
-
-traces_df <- rio::import(
+dat <- rio::import(
   here::here(
-    "src", "prl", "classification_traces", "traces.csv"
-  )
-)
-
-# Select the appropriate columns (remove the group posterior estimates). 
-# Then compute the mean of each column.
-# Step 1: Select columns containing "_subj"
-subj_columns <- select(traces_df, contains("_subj"))
-
-# Step 2: Compute the mean of each selected column
-column_means <- sapply(subj_columns, mean, na.rm = TRUE) |> 
-  as.data.frame()
-
-# column_means will contain the mean of each column that contains "_subj"
-
-column_means$string <- rownames(column_means) 
-colnames(column_means) <- c("value", "string")
-row.names(column_means) <- NULL
-
-column_means |> head()
-
-# Assuming your data frame is named column_means
-column_means <- column_means %>%
-  # Separate the 'string' column into 'parameter' and 'id' columns
-  separate(string, into = c("parameter", "id"), sep = "_subj\\.") %>%
-  # Remove the "_subj" part from the 'parameter' column
-  mutate(parameter = str_replace(parameter, "_subj", ""))
-
-
-# Transforming from long to wide format
-params_without_codes_df <- column_means %>%
-  pivot_wider(names_from = parameter, values_from = value, id_cols = id) |> 
-  dplyr::rename(
-    "subj_idx" = "id"
+    "src", "wcst", "traces", "wcst_params_classification.csv"
+    )
   )
 
-# Join the params_df with the look-up table.
-
-lookup_table <- rio::import(
-  here::here(
-    "src", "prl", "classification_traces", "lookup_table_classification.csv"
-  )
-) |> 
-  dplyr::select(-V1)
-lookup_table$subj_idx <- as.character(lookup_table$subj_idx)
-
-params_2grps <- left_join(
-  params_without_codes_df, lookup_table, by = "subj_idx"
-)
-
-params_2grps$is_patient <- ifelse(
-  params_2grps$group == "patients", 1, 0
-)
-
-# Select Dataframe.
-dat <- params_2grps
-
-dat$subj_idx <- NULL
-dat$subj_code <- NULL
-dat$group <- NULL
-
+dat$is_patient <- ifelse(dat$index < 46, 1, 0)
 dat$is_patient <- factor(dat$is_patient)
+
+dat$index <- NULL
 
 dd <- dat
 names(dd)
-# [1] "a"          "v"          "t"          "alpha"      "pos_alpha"  "is_patient"
 
 model_glm = glm(is_patient ~ ., data = dd, family = "binomial")
 
 test_prob = predict(model_glm, newdata = dd, type = "response")
 test_roc = roc(dd$is_patient ~ test_prob, plot = TRUE, print.auc = TRUE)
 
+# Comparisons between the two groups -------------------------------------------
+
+dd %>%
+  group_by(is_patient) %>%
+  summarise(
+    MB_Arew_mean = mean(MB_Arew),
+    MB_Arew_se = sd(MB_Arew) / sqrt(n()),
+    MB_Apun_mean = mean(MB_Apun),
+    MB_Apun_se = sd(MB_Apun) / sqrt(n()),
+    MB_gamma_mean = mean(MB_gamma),
+    MB_gamma_se = sd(MB_gamma) / sqrt(n()),
+    MF_Arew_mean = mean(MF_Arew),
+    MF_Arew_se = sd(MF_Arew) / sqrt(n()),
+    MF_Apun_mean = mean(MF_Apun),
+    MF_Apun_se = sd(MF_Apun) / sqrt(n()),
+    MF_gamma_mean = mean(MF_gamma),
+    MF_gamma_se = sd(MF_gamma) / sqrt(n()),
+    temp_mean = mean(temp),
+    temp_se = sd(temp) / sqrt(n()),
+    w_mean = mean(w),
+    w_se = sd(w) / sqrt(n())
+  ) |> 
+  as.data.frame()
+
+hist(dd$MB_Arew)
+
+m1 <- brm(
+  MB_Arew ~ is_patient,
+  family = student(),
+  data = dd,
+  chains = 4, 
+  cores = 8,
+  backend = "cmdstanr"
+  #threads = threading(2)
+)
+pp_check(m1)
+summary(m1, prob = 0.89)
+
+
+hist(dd$MB_Apun)
+
+m2 <- brm(
+  MB_Apun ~ is_patient,
+  family = student(),
+  data = dd,
+  chains = 4, 
+  cores = 8,
+  backend = "cmdstanr"
+  #threads = threading(2)
+)
+pp_check(m2)
+summary(m2, prob = 0.89)
+
+
 
 # Split into train/test ---------------------------------------------------
 
-set.seed(54645)
+set.seed(45823)
 # Put 3/4 of the data into the training set.
 data_split <- initial_split(dd, strata = is_patient, prop = 0.7)
 data_split
+
 # The strata argument causes the random sampling to be conducted within the 
 # stratification variable. This can help ensure that the number of data points 
 # in the training data is equivalent to the proportions in the original data 
@@ -162,7 +150,7 @@ test_data  %>%
 # We’re going to want to do some parameter tuning, and to do that we’re going 
 # to want to use cross-validation. So we can create a cross-validated version 
 # of the training set.
-prl_cv <- vfold_cv(train_data, v = 10, repeats = 100)
+prl_cv <- vfold_cv(train_data, v = 10, repeats = 500)
 
 
 # Define a recipe ---------------------------------------------------------
@@ -172,16 +160,7 @@ prl_recipe <-
   # and some pre-processing steps
   step_zv(all_predictors()) %>% 
   step_normalize(all_numeric()) 
-  # step_impute_knn(all_predictors()) %>% 
-  # step_dummy(all_nominal_predictors()) 
 prl_recipe
-
-# prl_train_preprocessed <- prl_recipe %>%
-#   # apply the recipe to the training data
-#   prep(train_data) %>%
-#   # extract the pre-processed training dataset
-#   juice()
-# prl_train_preprocessed
 
 
 # Specify the model -------------------------------------------------------
@@ -194,15 +173,18 @@ lr_model <-
   # choose either the continuous regression or binary classification mode
   set_mode("classification") 
 
-# rf_model <- 
-#   # specify that the model is a random forest
-#   rand_forest() %>%
-#   # specify that the `mtry` parameter needs to be tuned
-#   set_args(mtry = tune()) %>%
-#   # select the engine/package that underlies the model
-#   set_engine("ranger", importance = "impurity") %>%
-#   # choose either the continuous regression or binary classification mode
-#   set_mode("classification") 
+
+rf_model <- 
+  # specify that the model is a random forest
+  rand_forest() %>%
+  # specify that the `mtry` parameter needs to be tuned
+  set_args(mtry = tune()) %>%
+  # select the engine/package that underlies the model
+  set_engine("ranger", importance = "impurity") %>%
+  # choose either the continuous regression or binary classification mode
+  set_mode("classification") 
+
+
 
 
 # Create a workflow -------------------------------------------------------
@@ -213,6 +195,13 @@ lr_workflow <- workflow() %>%
   add_recipe(prl_recipe) %>%
   # add the model
   add_model(lr_model)
+
+
+rf_workflow <- workflow() %>%
+  # add the recipe
+  add_recipe(prl_recipe) %>%
+  # add the model
+  add_model(rf_model)
 
 
 # Tune the parameters -----------------------------------------------------
@@ -255,7 +244,6 @@ lr_workflow <- lr_workflow %>%
 
 # Evaluate the model on the test set --------------------------------------
 
-
 lr_fit <- lr_workflow %>%
   # fit on the training set and evaluate on test set
   last_fit(data_split)
@@ -296,4 +284,6 @@ lr_fit %>%
   collect_predictions() %>% 
   roc_curve(is_patient, .pred_0) %>% 
   autoplot()
+
+# eof ----
 

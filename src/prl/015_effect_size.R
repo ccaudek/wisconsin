@@ -26,12 +26,9 @@ suppressPackageStartupMessages({
   library("tune")
   library("pROC")
   library("tidymodels")  
-  library("stringr")
   # Helper packages
-  library("readr") # for importing data
-  library("tidyr")
+  library("readr")       # for importing data
   library("vip") 
-  library("pROC")
 })
 
 
@@ -41,86 +38,69 @@ options(max.print = .Machine$integer.max)
 cores <- parallel::detectCores()
 cores
 
-# source(here("code", "functions", "funs_prl.R"))
-# source(here("code", "functions", "funs_quest.R"))
-# source(here("code", "functions", "funs_rescorla_wagner.R"))
-# source(here("code", "functions", "funs_careless_resp.R"))
-# source(here("code", "functions", "funs_gen_data_for_hddm.R"))
-# 
-# source(here("code", "functions", "funs_param_analyses.R"))
-# source(here("code", "functions", "funs_param_classification_analyses.R"))
-
-# Get traces estimated without distinguishing the parameters' estimates 
-# by group.
-
-traces_df <- rio::import(
-  here::here(
-    "src", "prl", "classification_traces", "traces.csv"
-  )
-)
-
-# Select the appropriate columns (remove the group posterior estimates). 
-# Then compute the mean of each column.
-# Step 1: Select columns containing "_subj"
-subj_columns <- select(traces_df, contains("_subj"))
-
-# Step 2: Compute the mean of each selected column
-column_means <- sapply(subj_columns, mean, na.rm = TRUE) |> 
-  as.data.frame()
-
-# column_means will contain the mean of each column that contains "_subj"
-
-column_means$string <- rownames(column_means) 
-colnames(column_means) <- c("value", "string")
-row.names(column_means) <- NULL
-
-column_means |> head()
-
-# Assuming your data frame is named column_means
-column_means <- column_means %>%
-  # Separate the 'string' column into 'parameter' and 'id' columns
-  separate(string, into = c("parameter", "id"), sep = "_subj\\.") %>%
-  # Remove the "_subj" part from the 'parameter' column
-  mutate(parameter = str_replace(parameter, "_subj", ""))
+source(here("code", "functions", "funs_prl.R"))
+source(here("code", "functions", "funs_quest.R"))
+source(here("code", "functions", "funs_rescorla_wagner.R"))
+source(here("code", "functions", "funs_careless_resp.R"))
+source(here("code", "functions", "funs_gen_data_for_hddm.R"))
+source(here("code", "functions", "funs_param_analyses.R"))
+source(here("code", "functions", "funs_param_classification_analyses.R"))
 
 
-# Transforming from long to wide format
-params_without_codes_df <- column_means %>%
-  pivot_wider(names_from = parameter, values_from = value, id_cols = id) |> 
-  dplyr::rename(
-    "subj_idx" = "id"
-  )
+# Get parameter estimates
 
-# Join the params_df with the look-up table.
-
-lookup_table <- rio::import(
-  here::here(
-    "src", "prl", "classification_traces", "lookup_table_classification.csv"
-  )
-) |> 
-  dplyr::select(-V1)
-lookup_table$subj_idx <- as.character(lookup_table$subj_idx)
-
-params_2grps <- left_join(
-  params_without_codes_df, lookup_table, by = "subj_idx"
-)
-
-params_2grps$is_patient <- ifelse(
-  params_2grps$group == "patients", 1, 0
+params <- rio::import(
+  here::here("data", "processed", "prl", "params", "subj_code_hddm_params.csv")
 )
 
 # Select Dataframe.
-dat <- params_2grps
+dat <- params
 
-dat$subj_idx <- NULL
+dat$params <- NULL
 dat$subj_code <- NULL
-dat$group <- NULL
+dat$diag_cat <- NULL
+dat$group <- factor(dat$group)
 
-dat$is_patient <- factor(dat$is_patient)
+dat_wide <- dat %>%
+  pivot_wider(names_from = par, values_from = val)
 
-dd <- dat
-names(dd)
-# [1] "a"          "v"          "t"          "alpha"      "pos_alpha"  "is_patient"
+summary(dat_wide$group)
+
+d <- dat_wide |> 
+  dplyr::filter(group != "atrisk")
+effectsize::cohens_d(alpha ~ group, data = d)
+
+d <- dat_wide |> 
+  dplyr::filter(group != "controls")
+effectsize::cohens_d(alpha ~ group, data = d)
+
+d <- dat_wide |> 
+  dplyr::filter(group != "atrisk")
+effectsize::cohens_d(pos_alpha ~ group, data = d)
+
+d <- dat_wide |> 
+  dplyr::filter(group != "controls")
+effectsize::cohens_d(pos_alpha ~ group, data = d)
+
+
+d <- dat_wide |> 
+  dplyr::filter(group != "atrisk")
+effectsize::cohens_d(a ~ group, data = d)
+
+d <- dat_wide |> 
+  dplyr::filter(group != "controls")
+effectsize::cohens_d(a ~ group, data = d)
+
+
+
+
+
+
+
+library(pROC)
+
+dd <- dat_wide |> 
+  dplyr::select(-subj_idx)
 
 model_glm = glm(is_patient ~ ., data = dd, family = "binomial")
 
@@ -145,7 +125,7 @@ data_split
 train_data <- training(data_split)
 test_data  <- testing(data_split)
 
-dim(dat)
+dim(dat_wide)
 dim(train_data)
 dim(test_data)
 
@@ -264,8 +244,8 @@ lr_fit
 test_performance <- lr_fit %>% 
   collect_metrics()
 test_performance 
-# 1 accuracy binary         0.759 Preprocessor1_Model1
-# 2 roc_auc  binary         0.781 Preprocessor1_Model1
+# 1 accuracy binary         0.793 Preprocessor1_Model1
+# 2 roc_auc  binary         0.871 Preprocessor1_Model1
 
 
 # generate predictions from the test set
