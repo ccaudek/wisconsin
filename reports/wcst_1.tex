@@ -54,14 +54,28 @@
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 \setcounter{secnumdepth}{-\maxdimen} % remove section numbering
 % Make \paragraph and \subparagraph free-standing
+\makeatletter
 \ifx\paragraph\undefined\else
   \let\oldparagraph\paragraph
-  \renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
 \fi
 \ifx\subparagraph\undefined\else
   \let\oldsubparagraph\subparagraph
-  \renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
 \fi
+\makeatother
 % definitions for citeproc citations
 \NewDocumentCommand\citeproctext{}{}
 \NewDocumentCommand\citeproc{mm}{%
@@ -198,7 +212,7 @@
 \date{}
 
 
-\shorttitle{PRL, WCST and TS in Anorexia Nervosa}
+\shorttitle{PRL, WCST and TS in AN-R}
 
 \authornote{
 
@@ -229,14 +243,9 @@ Two or three sentences to provide a \textbf{broader perspective}, readily compre
 \begin{document}
 \maketitle
 
-Executive function impairments broadly, and flexibility impairments specifically, are observed across many forms of psychopathology and may serve as transdiagnostic intermediate phenotypes.
-
-All of the DSM-V categories (with the possible exception of sleep--wake disorders) include clinical conditions in which domains of executive function are compromised; this raises the question of the extent to which the construct of flexibility has discriminative value.
-
 \section{Methods}\label{methods}
 
 We report how we determined our sample size, all data exclusions (if any), all manipulations, and all measures in the study.
-We used R (Version 4.3.2; R Core Team, 2023) and the R-packages \emph{papaja} (Version 0.1.2.9000; Aust \& Barth, 2023), and \emph{tinylabels} (Version 0.2.4; Barth, 2023) for all our analyses.
 
 \subsection{Participants}\label{participants}
 
@@ -244,72 +253,13 @@ We used R (Version 4.3.2; R Core Team, 2023) and the R-packages \emph{papaja} (V
 
 \subsection{Procedure}\label{procedure}
 
-\subsubsection{WCST}\label{wcst}
+\subsection{Data analysis}\label{data-analysis}
 
-The Wisconsin Card Sorting Test (WCST), first developed in 1948, was designed to probe into key cognitive functions including perseveration, abstract reasoning, and the flexibility to shift between different sets of rules. The test operates on a simple premise, where participants are shown four key cards that are distinct across three critical dimensions: color, shape, and the quantity of objects displayed. The task for participants involves categorizing a series of additional cards according to these dimensions.
+We used R (Version 4.4.0; R Core Team, 2023) and the R-packages \emph{papaja} (Version 0.1.2.9000; Aust \& Barth, 2023), and \emph{tinylabels} (Version 0.2.4; Barth, 2023) for all our analyses.
 
-One of the hallmark features of the WCST is its dynamic nature. Despite there being four possible criteria for categorization, participants must deduce the correct sorting principle based solely on feedback provided during the test. However, adding to the complexity, once participants successfully apply a rule over several trials, the sorting rule changes. This sudden shift requires participants to quickly adapt and discern the new rule without any explicit notification of the change. In the computerized version of the WCST, automates both the card presentation and feedback mechanisms. Specifically, the current version of the test consisted of 60 trials, with a rule change occurring after every 10 trials. Participants received immediate feedback on each sorting attempt.
-
-Performance on the WCST is strongly related to shifting (also referred to as ``attention switching'' or ``task switching''), which involves the disengagement of an irrelevant task set and subsequent active engagement of a relevant task set.
-
-\subsubsection{PRL}\label{prl}
-
-In reversal learning paradigms, participants initially undergo a series of trials where they learn to associate two choices with their respective reward outcomes. Once this association is established through a learning phase, the paradigm shifts -- the previously learned associations between choices and outcomes are inverted. This sudden change tests the participants' ability to adapt their decision-making processes and modify their behaviors in response to the new choice-outcome mapping. The efficacy with which participants manage to navigate this transition and adjust their choices according to the reversed contingencies serves as an indicator of cognitive flexibility.
-
-\subsection{Computational Models}\label{computational-models}
-
-\subsubsection{WCST}\label{wcst-1}
-
-\subsubsection{Task Switching}\label{task-switching}
-
-The Task Switching paradigm aims to uncover cognitive rigidity through impairments in decision-making processes. To distinguish the purposed differences in decision-making across distinct groups, we applied the Drift Diffusion Model (DDM) to our data (Schmitz \& Voss, 2012). The DDM conceptualizes decision-making as a stochastic process, as indicated by the formula:
-
-\[W(t + dt) = W(t) + v \cdot dt + n,\]
-
-where \(dt\) represents a discrete time increment, \(v\) denotes the mean drift rate, and \(n\) is random Gaussian noise. Here, \(W\) signifies the position at any given moment between two decision boundaries, 0 and \(a\).
-
-A decision is considered made when \(W\) reaches either boundary: reaching 0 implies an incorrect response, whereas reaching \(a\) signifies a correct response. Given that we analyze correct and incorrect responses across various stimuli without inherent bias, we set the starting point equidistant from both boundaries, at \(a/2\).
-
-The model is includes three parameters:
-
-\begin{itemize}
-\item
-  Drift Rate (\(v\)): Reflects how efficiently information is processed to make a decision. This rate can be influenced by factors such as task complexity, individual cognitive capabilities, motivation, fatigue, or distraction.
-\item
-  Decision Boundary (\(a\)): Interpreted as a measure of decision caution. Higher boundaries indicate a preference for accuracy over speed, illustrating the trade-off between decision speed and accuracy. Increased values indicate lower confidence in decision-making, serving as indicators of cognitive rigidity.
-\item
-  Non-decision Time (\(t\)): Represents the time spent on processes preceding the decision, such as stimulus encoding, preparation for the task, and the initiation of motor responses, with no expected differences across groups.
-\end{itemize}
-
-\subsubsection{Probabilistic Reversal Learning (PRL)}\label{probabilistic-reversal-learning-prl}
-
-In Probabilistic Reversal Learning tasks, cognitive rigidity may emerge from deficits in either learning or decision-making. The Reinforcement Learning Drift Diffusion Model (RLDDM) marries the delta rule for updating expectations of rewards (Rescorla \& Wagner, 1972) with a drift-diffusion framework for decision-making (Ratcliff \& McKoon, 2008), featuring six parameters:
-
-\begin{itemize}
-\item
-  Learning Rates for Rewards (\(\alpha+\)) and Punishments (\(\alpha-\)): These rates reveal cognitive rigidity through diminished learning from rewards and punishments, particularly notable in certain groups compared to healthy controls.
-\item
-  Drift Rate (\(v\)), decision Boundary (\(a\)), and Non-decision Time (\(t\)) have the same interpretation as indicated above.
-\end{itemize}
-
-In all cases, model parameters were analyzed based on group type (AN, HC, RI) to examine learning and decision-making differences, facilitating a nuanced understanding of cognitive flexibility across conditions.
-
-\subsection{Data Analysis}\label{data-analysis}
-
-\subsubsection{PRL}\label{prl-1}
-
-The final model was estimated through 15,000 iterations, with an initial burn-in period of 5,000 iterations. Convergence was evaluated using the Gelman-Rubin statistic, which indicated good convergence with \(\hat{R}\) values below 1.03 for all parameters (average \(\hat{R}\) = 1.001). Additionally, collinearity and posterior predictive checks were performed to ensure the validity of the model. To investigate group differences in reinforcement learning, we compared the posterior estimates of RLDDM's parameters across different groups.
-
-We observed a reduced learning rate from punishments in the R-AN group compared to both the HC group (Cohen's \(d\) = 1.25; \(p_{\text{neg-alpha AN > neg-alpha HC}} = 0.0009\)) and the RI group (Cohen's \(d\) = 0.99; \(p_{\text{neg-alpha AN > neg-alpha RI}} = 0.0212\)). Furthermore, the R-AN group exhibited a decreased learning rate from rewards when compared to both the HC group (Cohen's \(d\) = 0.71; \(p_{\text{neg-alpha AN > neg-alpha HC}} = 0.0441\)) and the RI group (Cohen's \(d\) = 0.92; \(p_{\text{neg-alpha AN > neg-alpha RI}} = 0.0462\)).
-
-R-AN individuals exhibited a higher decision threshold for disorder-related choices
-compared to HC (Cohen's \(d\) = 0.96; \(p_{\text{a AN < a HC}} = 0.0001\)) and RI (Cohen's \(d\) = 0.64; \(p_{\text{a AN < a RI}} = 0.0078\)).
-
-Lastly, no credible differences were noted in between-group comparisons for the drift rate (\(\nu\)) and non-decision time parameters (\(t\)).
+\section{Results}\label{results}
 
 \section{Discussion}\label{discussion}
-
-It is important to keep in mind that laboratory-based measures and neuropsychological tests have high construct validity but may not always converge with real-world flexible behaviours as indexed using self-report or informant-report questionnaires, which typically have greater ecological validity.
 
 \newpage
 
@@ -325,9 +275,6 @@ Barth, M. (2023). \emph{{tinylabels}: Lightweight variable labels}. Retrieved fr
 
 \bibitem[\citeproctext]{ref-R-base}
 R Core Team. (2023). \emph{R: A language and environment for statistical computing}. Vienna, Austria: R Foundation for Statistical Computing. Retrieved from \url{https://www.R-project.org/}
-
-\bibitem[\citeproctext]{ref-schmitz2012decomposing}
-Schmitz, F., \& Voss, A. (2012). Decomposing task-switching costs with the diffusion model. \emph{Journal of Experimental Psychology: Human Perception and Performance}, \emph{38}(1), 222--250.
 
 \end{CSLReferences}
 

@@ -8,10 +8,12 @@
 # 👉 
 
 # Prelims
-library("here")
-library("tidyverse")
-library("brms")
-library("cmdstanr")
+suppressPackageStartupMessages({
+  library("here")
+  library("tidyverse")
+  library("brms")
+  library("cmdstanr")
+})
 
 # Version 2.34.1 does not work
 set_cmdstan_path("/Users/corrado/.cmdstan/cmdstan-2.33.1")

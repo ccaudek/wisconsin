@@ -42,8 +42,10 @@ cores <- parallel::detectCores()
 cores
 
 dat <- rio::import(
-    "hddmrl_params.csv"
+  here::here(
+    "src", "wcst", "prl_classification_analysis", "hddmrl_params.csv"
   )
+)
 
 dat$is_patient <- ifelse(dat$subj_idx < 51, 0, 1)
 dat$is_patient <- factor(dat$is_patient)
@@ -70,6 +72,14 @@ dd_wide <- dd %>%
 dd_wide$is_patient <- ifelse(dd_wide$subj_idx < 51, 0, 1)
 dd_wide$is_patient |> table()
 
+for_saving <- dd_wide |> 
+  # dplyr::select(-c(is_patient)) |> 
+  dplyr::rename(index = subj_idx)
+
+rio::export(
+  for_saving, "hddmrl_params_wide.csv"
+)
+
 model_glm = glm(
   is_patient ~ a + alpha + pos_alpha + t + v, 
   data = dd_wide, 
@@ -79,6 +89,87 @@ model_glm = glm(
 test_prob = predict(model_glm, newdata = dd_wide, type = "response")
 test_roc = roc(dd_wide$is_patient ~ test_prob, plot = TRUE, print.auc = TRUE)
 # AUC: 0.822
+
+
+# Bayesian AUC ------------------------------------------------------------
+
+# Compile the model
+model <- cmdstan_model(
+  here::here(
+    "src", "wcst", "prl_classification_analysis", "prl_logistic_model.stan")
+  )
+
+# Prepare data
+stan_data <- list(
+  N = nrow(dd_wide),
+  P = 5,  # number of predictors
+  X = as.matrix(dd_wide[, c("a", "alpha", "pos_alpha", "t", "v")]),
+  y = dd_wide$is_patient
+)
+
+# Fit the model
+fit <- model$sample(
+  data = stan_data,
+  seed = 123,
+  chains = 4,
+  parallel_chains = 4,
+  refresh = 500
+)
+
+library(pROC)
+library(tidybayes)
+
+# Extract posterior samples
+posterior_samples <- fit$draws(format = "df")
+
+# Print the first few column names of posterior_samples
+print(head(colnames(posterior_samples), 10))
+
+# Print the first row of posterior_samples
+print(posterior_samples[1, 1:10])
+
+calculate_auc <- function(sample) {
+  # Extract beta coefficients
+  beta_cols <- paste0("beta[", 1:5, "]")  # Assuming 5 predictors
+  betas <- as.numeric(sample[beta_cols])
+  
+  # Extract alpha (intercept)
+  alpha <- as.numeric(sample["alpha"])
+  
+  # Ensure betas is a column vector
+  betas <- matrix(betas, ncol = 1)
+  
+  # Calculate logits
+  logits <- stan_data$X %*% betas + alpha
+  
+  # Convert to probabilities
+  probs <- 1 / (1 + exp(-logits))
+  
+  # Ensure probs is numeric
+  probs <- as.numeric(probs)
+  
+  # Calculate AUC
+  auc <- roc(stan_data$y, probs)$auc
+  return(auc)
+}
+
+
+# Try to calculate AUC for the first sample
+test_auc <- calculate_auc(posterior_samples[1, ])
+print(test_auc)
+
+
+# If the above works, calculate AUC for all samples
+aucs <- apply(posterior_samples, 1, calculate_auc)
+
+# Calculate the 0.89 credibility interval for AUCs
+ci_lower <- quantile(aucs, probs = 0.055)
+median <- quantile(aucs, probs = 0.5)
+ci_upper <- quantile(aucs, probs = 0.945)
+
+# Print the credibility interval
+print(paste("0.89 credibility interval for AUCs:", ci_lower, "-", median, "-", ci_upper))
+
 
 
 # Comparisons between the two groups -------------------------------------------

@@ -1,6 +1,6 @@
 ---
-title: "Differential Sensitivity of Cognitive Flexibility Measures in Anorexia Nervosa: A Comparative Evaluation of the Probabilistic Reversal Learning Task, Wisconsin Card Sorting Test, and Task Switching"
-shorttitle: "PRL, WCST and TS in Anorexia Nervosa"
+title             : "Differential Sensitivity of Cognitive Flexibility Measures in Anorexia Nervosa: A Comparative Evaluation of the Probabilistic Reversal Learning Task, Wisconsin Card Sorting Test, and Task Switching"
+shorttitle        : "PRL, WCST and TS in AN-R"
 
 author: 
   - name          : "First Author"
@@ -43,7 +43,7 @@ abstract: |
 keywords          : "keywords"
 wordcount         : "X"
 
-bibliography      : "references.bib"
+bibliography      : "r-references.bib"
 
 floatsintext      : no
 linenumbers       : yes
@@ -68,6 +68,24 @@ r_refs("r-references.bib")
 set.seed(42)
 knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
 ```
+
+
+# Methods
+We report how we determined our sample size, all data exclusions (if any), all manipulations, and all measures in the study. <!-- 21-word solution (Simmons, Nelson & Simonsohn, 2012; retrieved from http://ssrn.com/abstract=2160588) -->
+
+## Participants
+
+## Material
+
+## Procedure
+
+## Data analysis
+We used `r cite_r("r-references.bib")` for all our analyses.
+
+
+# Results
+
+# Discussion
 
 
 \newpage

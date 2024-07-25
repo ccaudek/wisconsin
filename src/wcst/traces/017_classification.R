@@ -48,6 +48,14 @@ dat <- rio::import(
   )
 
 dat$is_patient <- ifelse(dat$index < 46, 1, 0)
+
+rio::export(
+  dat,
+  here::here(
+    "src", "wcst", "traces", "wcst_params_classification_wide.csv"
+  )
+)
+
 dat$is_patient <- factor(dat$is_patient)
 
 dat$index <- NULL
@@ -59,6 +67,7 @@ model_glm = glm(is_patient ~ ., data = dd, family = "binomial")
 
 test_prob = predict(model_glm, newdata = dd, type = "response")
 test_roc = roc(dd$is_patient ~ test_prob, plot = TRUE, print.auc = TRUE)
+
 
 # Comparisons between the two groups -------------------------------------------
 
