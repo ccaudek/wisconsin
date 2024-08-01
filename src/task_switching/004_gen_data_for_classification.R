@@ -18,7 +18,6 @@ suppressPackageStartupMessages({
   library("ggrepel")          # Automatically position labels
   library("patchwork")        # Combine ggplot objects
   library("emmeans")          # Calculate marginal effects in even fancier ways
-  # library("modelsummary")     # Create side-by-side regression tables
   library("cmdstanr")
   library("tidyr")
 })
@@ -97,43 +96,6 @@ plot_df %>%
   theme(legend.position = "bottom")
 
 hist(task_switch_df$rt)
-
-
-
-# Generate data for AUC classification with Stan --------------------------
-
-# Create a new dataframe excluding group "RI"
-filtered_df <- task_switch_df %>%
-  dplyr::filter(group != "RI")
-
-# Add the is_patient column
-filtered_df <- filtered_df %>%
-  mutate(is_patient = ifelse(group == "AN", 1, 0))
-
-# Calculate the task-switch cost separately for resp_transition == "switch" and resp_transition == "repetition"
-task_switch_cost <- filtered_df %>%
-  group_by(subj_id, task_transition, resp_transition) %>%
-  summarise(mean_rt = mean(rt, na.rm = TRUE)) %>%
-  spread(key = task_transition, value = mean_rt) %>%
-  mutate(task_switch_cost = switch - repetition) %>%
-  ungroup()
-
-# Create the final wide-format dataframe including is_patient, removing subj_id
-final_df <- task_switch_cost %>%
-  left_join(filtered_df %>% select(subj_id, is_patient) %>% distinct(), by = "subj_id") %>%
-  dplyr::select(subj_id, resp_transition, task_switch_cost, is_patient) %>%
-  spread(key = resp_transition, value = task_switch_cost) %>%
-  dplyr::select(-subj_id)
-
-# Move the is_patient column to the end
-final_df <- final_df %>%
-  dplyr::relocate(is_patient, .after = last_col())
-
-rio::export(
-  final_df, 
-  here::here("src", "stan_auc", "models_params", "task_switching_behav_indices.csv")
-)
-
 
 
 # Error rates

@@ -36,17 +36,29 @@
   \KOMAoptions{parskip=half}}
 \makeatother
 \usepackage{xcolor}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
 \usepackage{graphicx}
 \makeatletter
-\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
-\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
-\makeatother
-% Scale images if necessary, so that they will not overflow the page
-% margins by default, and it is still possible to overwrite the defaults
-% using explicit options in \includegraphics[width, height, ...]{}
-\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
 % Set default figure placement to htbp
-\makeatletter
 \def\fps@figure{htbp}
 \makeatother
 \setlength{\emergencystretch}{3em} % prevent overfull lines
@@ -118,6 +130,9 @@
 % get rid of language-specific shorthands (see #6817):
 \let\LanguageShortHands\languageshorthands
 \def\languageshorthands#1{}
+\ifLuaTeX
+  \usepackage[english]{selnolig} % disable illegal ligatures
+\fi
 % Manuscript styling
 \usepackage{upgreek}
 \captionsetup{font=singlespacing,justification=justified}
@@ -193,9 +208,6 @@
 
 \linenumbers
 \usepackage{csquotes}
-\ifLuaTeX
-  \usepackage{selnolig}  % disable illegal ligatures
-\fi
 \usepackage{bookmark}
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
@@ -255,9 +267,186 @@ We report how we determined our sample size, all data exclusions (if any), all m
 
 \subsection{Data analysis}\label{data-analysis}
 
-We used R (Version 4.4.0; R Core Team, 2023) and the R-packages \emph{papaja} (Version 0.1.2.9000; Aust \& Barth, 2023), and \emph{tinylabels} (Version 0.2.4; Barth, 2023) for all our analyses.
+\subsubsection{Data Analysis}\label{data-analysis-1}
+
+\paragraph{Computational Modeling}\label{computational-modeling}
+
+In this study, we employed three computational models to analyze the data from the three behavioral tasks: the Wisconsin Card Sorting Task (WCST), the Probabilistic Reversal Learning (PRL) task, and the Task Switching (TS) task. Each model was chosen to capture the specific cognitive processes underlying performance in these tasks.
+
+\paragraph{Task Switching: Drift Diffusion Model (DDM)}\label{task-switching-drift-diffusion-model-ddm}
+
+For the Task Switching data, we used the Drift Diffusion Model (DDM) to analyze participants' performance. The DDM is a widely used cognitive model that describes the decision-making process as a stochastic accumulation of evidence over time until a decision threshold is reached. This model is particularly suited for tasks requiring speeded binary decisions, such as the Task Switching task, where participants must quickly decide between continuing with a previous task or switching to a new one.
+
+For each participant, we computed three key parameters of the DDM separately for ``repeat'' and ``switch'' trials:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Drift Rate (v)}: This parameter represents the average rate of evidence accumulation. A higher drift rate indicates faster and more accurate decision-making, reflecting better task performance.
+\item
+  \textbf{Boundary Separation (a)}: This parameter reflects the amount of evidence required to make a decision. Larger values of boundary separation indicate a more cautious decision-making strategy, where more evidence is needed before committing to a choice.
+\item
+  \textbf{Non-decision Time (t)}: This parameter accounts for the time taken by processes other than decision-making, such as sensory encoding and motor execution. It is the time elapsed before the decision process begins.
+\end{enumerate}
+
+By analyzing the DDM parameters separately for ``repeat'' and ``switch'' trials, we can gain insights into how cognitive control and flexibility are modulated during task switching. Specifically, differences in drift rates between ``repeat'' and ``switch'' trials can reveal the efficiency of cognitive processes involved in maintaining or shifting task sets, while variations in boundary separation and non-decision time can provide information about decision strategies and preparatory processes.
+
+\paragraph{Probabilistic Reversal Learning: The Reinforcement Learning Drift Diffusion Model}\label{probabilistic-reversal-learning-the-reinforcement-learning-drift-diffusion-model}
+
+\subsubsection{Data Analysis}\label{data-analysis-2}
+
+\paragraph{Computational Modeling}\label{computational-modeling-1}
+
+In this study, we employed three computational models to analyze the data from the three behavioral tasks: the Wisconsin Card Sorting Task (WCST), the Probabilistic Reversal Learning (PRL) task, and the Task Switching (TS) task. Each model was chosen to capture the specific cognitive processes underlying performance in these tasks.
+
+\paragraph{Probabilistic Reversal Learning: Reinforcement Learning Drift Diffusion Model (RLDDM)}\label{probabilistic-reversal-learning-reinforcement-learning-drift-diffusion-model-rlddm}
+
+For the Probabilistic Reversal Learning (PRL) task, we utilized the Reinforcement Learning Drift Diffusion Model (RLDDM) as described by Pedersen and Frank (2020). This model integrates elements of both reinforcement learning and the drift diffusion model to provide a comprehensive account of decision-making processes that involve both learning from probabilistic outcomes and making decisions based on accumulated evidence.
+
+The RLDDM captures two key aspects of behavior in the PRL task:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Reinforcement Learning Component.} The model uses the delta learning rule to update the expected values (Q-values) of different options based on reward feedback. This rule is expressed as:
+  \[
+    Q_{o,i} = Q_{o,i-1} + \alpha ( \text{Reward}_{o,i-1} - Q_{o,i-1} ),
+    \]
+\end{enumerate}
+
+where \(Q_{o,i}\) is the expected value of option \(o\) on trial \(i\), \(\alpha\) is the learning rate, and \(\text{Reward}_{o,i-1}\) is the reward received for option \(o\) on trial \(i-1\). The learning rate \(\alpha\) determines the speed at which the model updates its expectations based on new information.
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\setcounter{enumi}{1}
+\tightlist
+\item
+  \textbf{Drift Diffusion Component.} The decision-making process is modeled as a drift diffusion process where evidence accumulates over time until a decision threshold is reached. The drift rate (\(v\)) in the RLDDM is influenced by the difference in Q-values between the options, scaled by a parameter similar to the inverse temperature parameter in the softmax function used in traditional RL models. The drift rate for trial \(i\) is given by:
+  \[
+    v_i = (Q_{\text{upper},i} - Q_{\text{lower},i}) \times v,
+    \]
+\end{enumerate}
+
+where \(Q_{\text{upper},i}\) and \(Q_{\text{lower},i}\) are the Q-values for the options associated with the upper and lower decision thresholds, respectively, and \(v\) is a scaling parameter that controls the exploration-exploitation balance. Additionally, the RLDDM includes parameters for boundary separation (\(a\)) and non-decision time (\(t\)).
+
+By integrating reinforcement learning and decision-making processes, the RLDDM provides a detailed and nuanced understanding of how participants learn from probabilistic outcomes and make decisions based on accumulated evidence. This model is particularly suited for capturing the complexities of cognitive rigidity and flexibility in anorexic patients compared to healthy controls.
+
+\paragraph{Wisconsin Card Sorting Task: Reinforcement Learning Models}\label{wisconsin-card-sorting-task-reinforcement-learning-models}
+
+For the Wisconsin Card Sorting Task (WCST), we followed the model selection procedure outlined by Steinke, Lange, and Kopp (2020). This involved computing the Widely Applicable Information Criterion (WAIC) for all the Reinforcement Learning (RL)-based models considered by Steinke et al., and selecting the best model based on the lowest WAIC value. The WAIC provides a measure of model fit while penalizing model complexity, thus balancing goodness-of-fit with model parsimony. We compared several models, including pure Model-Based (MB) RL, pure Model-Free (MF) RL, and parallel MB-MF RL models (Steinke et al., 2020). Consistent with their findings, the weighted Parallel Reinforcement Learning (wP-RL) model emerged as the best-fitting model for our data.
+
+The wP-RL model integrates both MB and MF reinforcement learning processes to explain card sorting performance. The model assumes that participants use feedback to update their expectations about categories (model-based) and responses (model-free) in parallel, which are then linearly combined to determine behavior.
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Model-Based Learning}:
+
+  \begin{itemize}
+  \tightlist
+  \item
+    The MB component involves updating feedback expectations for different sorting categories. This is achieved using a delta-learning rule, where the prediction error (the difference between expected and received feedback) adjusts the expected value of the selected category.
+  \item
+    Learning rates (\(\alpha^+_{MB}\) for positive feedback and \(\alpha^-_{MB}\) for negative feedback) determine the extent of these adjustments.
+  \item
+    An inertia parameter (\(\gamma_{MB}\)) accounts for the persistence of feedback expectations across trials.
+  \end{itemize}
+\item
+  \textbf{Model-Free Learning}:
+
+  \begin{itemize}
+  \tightlist
+  \item
+    The MF component updates feedback expectations directly based on the executed response, independent of the abstract sorting category.
+  \item
+    Similar to the MB component, it uses separate learning rates (\(\alpha^+_{MF}\) for positive feedback and \(\alpha^-_{MF}\) for negative feedback) and an inertia parameter (\(\gamma_{MF}\)).
+  \end{itemize}
+\item
+  \textbf{Integration and Response Selection}:
+
+  \begin{itemize}
+  \tightlist
+  \item
+    The integrated feedback expectation for a response (\(Q_{sum}(t)\)) is a weighted sum of the MB and MF expectations. A weighting parameter (\(w\)) quantifies the relative influence of the MB and MF components.
+  \item
+    The probability of selecting a response is determined using a softmax function applied to the integrated feedback expectations, modulated by a temperature parameter (\(\tau\)) that controls the randomness of choices.
+  \end{itemize}
+\end{enumerate}
+
+Steinke et al.~argued that RL-based models, particularly those integrating both MB and MF processes, provide a more comprehensive account of WCST performance compared to traditional models. This is because the RL framework can capture the dynamic updating of expectations based on feedback, which is crucial for tasks requiring cognitive flexibility like the WCST.
+
+The superiority of the wP-RL model, both in our study and in Steinke et al. (2020) research, underscores the importance of considering multiple levels of learning (both categorical and response-based) in understanding cognitive processes. The wP-RL model's ability to simulate perseveration errors and their modulation by response demands further supports its validity as a robust computational framework for analyzing cognitive rigidity in anorexic patients.
+
+\paragraph{Estimation Method for Computational Models}\label{estimation-method-for-computational-models}
+
+To estimate the parameters of the three computational models used in this study, we employed a hierarchical Bayesian framework implemented in the hDDM Python package. This method allows for the estimation of individual-level parameters while accounting for between-subject variability through a hierarchical structure, enhancing parameter identifiability and robustness, especially when dealing with noisy behavioral data.
+
+The hDDM package utilizes Markov Chain Monte Carlo (MCMC) sampling to generate posterior distributions for the model parameters and was employed for estimating the parameters of the DDM and RLDDM models. We used a custom Stan model for estimating the parameters of the WCST models (Steinke et al., 2020).
+
+This probabilistic approach provides several advantages, including the ability to incorporate prior knowledge, improve parameter estimation accuracy, and handle the variability in participants' data more effectively. The MCMC sampling enables us to quantify the uncertainty in our parameter estimates and make inferences about the cognitive processes underlying task performance.
 
 \section{Results}\label{results}
+
+\subsubsection{Results}\label{results-1}
+
+\paragraph{Behavioral Indices}\label{behavioral-indices}
+
+The primary objective of this study was to evaluate the efficacy of three behavioral tasks---Wisconsin Card Sorting Task (WCST), Probabilistic Reversal Learning (PRL) task, and Task Switching (TS) task---in measuring cognitive rigidity in anorexic (AN) patients compared to healthy controls. Behavioral indices were computed for each task and subsequently analyzed using logistic regression models to differentiate between the two groups.
+
+The Area Under the Curve (AUC) values, which represent the discriminatory power of each task, are presented in Table 1. The WCST, commonly used in cognitive rigidity studies, yielded an AUC of 0.717 (95\% CI: 0.651, 0.763). In comparison, the PRL task, which measures reinforcement learning, achieved a higher AUC of 0.805 (95\% CI: 0.769, 0.827). The TS task, measuring pure task-switching abilities, showed an AUC of 0.752 (95\% CI: 0.713, 0.774).
+
+\paragraph{Comparison of Behavioral Indices}\label{comparison-of-behavioral-indices}
+
+Comparative analysis of the behavioral indices between the tasks revealed significant differences. The PRL task demonstrated a significantly higher AUC compared to the WCST (AUC difference = 0.114, 95\% CI: 0.042, 0.216) and the TS task (AUC difference = -0.0111, 95\% CI: -0.044, 0.0183). The difference in AUC between the TS task and the WCST was also significant (AUC difference = 0.125, 95\% CI: 0.0575, 0.225).
+
+\paragraph{Computational Modeling}\label{computational-modeling-2}
+
+In addition to behavioral indices, computational models were employed to derive more nuanced predictors of task performance. These models were used to further assess the discriminative ability of each task.
+
+The AUC for the PRL task based on computational modeling was 0.805 (95\% CI: 0.769, 0.827), higher than the WCST (AUC = 0.717, 95\% CI: 0.651, 0.763) and the TS task (AUC = 0.752, 95\% CI: 0.713, 0.774). The differences in AUC values based on computational modeling were as follows: PRL vs.~WCST (AUC difference = 0.0879, 95\% CI: 0.0294, 0.158), PRL vs.~TS (AUC difference = 0.0529, 95\% CI: 0.00988, 0.0984), and TS vs.~WCST (AUC difference = 0.0350, 95\% CI: -0.0252, 0.106).
+
+\paragraph{Behavioral Indices vs.~Computational Modeling}\label{behavioral-indices-vs.-computational-modeling}
+
+Comparing the behavioral indices with computational modeling results for each task, the PRL task showed a moderate difference (AUC difference = 0.0460, 95\% CI: 0.00612, 0.0844), indicating some additional discriminatory power from the computational model. For the TS task, the difference was -0.0179 (95\% CI: -0.0592, 0.0147), and for the WCST, the difference was 0.0723 (95\% CI: -0.0253, 0.185).
+
+\paragraph{Summary}\label{summary}
+
+Overall, the PRL task demonstrated superior discriminative ability compared to both the WCST and TS tasks, suggesting it provides a more accurate measure of cognitive rigidity in AN patients. The computational modeling reinforced these findings, although the additional predictive power over behavioral indices alone was moderate. These results highlight the importance of selecting appropriate tasks and methodologies for assessing cognitive rigidity in clinical populations.
+
+\textbf{Table 1. AUC values for behavioral tasks and their comparisons}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Task & AUC & 95\% CI \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+WCST & 0.717 & 0.651, 0.763 \\
+PRL & 0.805 & 0.769, 0.827 \\
+TS & 0.752 & 0.713, 0.774 \\
+\end{longtable}
+
+\textbf{Table 2. AUC differences for task comparisons}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Comparison & AUC Difference & 95\% CI \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+PRL vs.~WCST (Behavioral) & 0.114 & 0.042, 0.216 \\
+PRL vs.~TS (Behavioral) & -0.0111 & -0.044, 0.0183 \\
+TS vs.~WCST (Behavioral) & 0.125 & 0.0575, 0.225 \\
+PRL vs.~WCST (Computational) & 0.0879 & 0.0294, 0.158 \\
+PRL vs.~TS (Computational) & 0.0529 & 0.00988, 0.0984 \\
+TS vs.~WCST (Computational) & 0.0350 & -0.0252, 0.106 \\
+\end{longtable}
+
+These findings underscore the utility of the PRL task in clinical assessments of cognitive rigidity, with implications for both research and clinical practice in anorexia nervosa. These results suggest that the PRL task, particularly when analyzed using computational modeling parameters, provides the best discrimination between AN patients and healthy controls. This finding supports the notion that associative learning processes, as measured by the PRL task, may be a more sensitive marker of cognitive rigidity in AN compared to task switching abilities or the combined measure provided by the WCST.
 
 \section{Discussion}\label{discussion}
 
@@ -267,14 +456,11 @@ We used R (Version 4.4.0; R Core Team, 2023) and the R-packages \emph{papaja} (V
 
 \phantomsection\label{refs}
 \begin{CSLReferences}{1}{0}
-\bibitem[\citeproctext]{ref-R-papaja}
-Aust, F., \& Barth, M. (2023). \emph{{papaja}: {Prepare} reproducible {APA} journal articles with {R Markdown}}. Retrieved from \url{https://github.com/crsh/papaja}
+\bibitem[\citeproctext]{ref-pedersen2020simultaneous}
+Pedersen, M. L., \& Frank, M. J. (2020). Simultaneous hierarchical bayesian parameter estimation for reinforcement learning and drift diffusion models: A tutorial and links to neural data. \emph{Computational Brain \& Behavior}, \emph{3}(4), 458--471.
 
-\bibitem[\citeproctext]{ref-R-tinylabels}
-Barth, M. (2023). \emph{{tinylabels}: Lightweight variable labels}. Retrieved from \url{https://cran.r-project.org/package=tinylabels}
-
-\bibitem[\citeproctext]{ref-R-base}
-R Core Team. (2023). \emph{R: A language and environment for statistical computing}. Vienna, Austria: R Foundation for Statistical Computing. Retrieved from \url{https://www.R-project.org/}
+\bibitem[\citeproctext]{ref-steinke2020parallel}
+Steinke, A., Lange, F., \& Kopp, B. (2020). Parallel model-based and model-free reinforcement learning for card sorting performance. \emph{Scientific Reports}, \emph{10}(1), 15464.
 
 \end{CSLReferences}
 

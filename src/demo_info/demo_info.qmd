@@ -1,0 +1,162 @@
+---
+title: "WCST, PRL, and Task Switching for Discriminating AN Patients and Healthy Controls"
+subtitle: "Demographic Information"
+author: "Corrado Caudek"
+date: "2024-07-27"
+format:
+  html:
+    theme: cosmo
+    code-fold: false
+    code-tools: true
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Project Overview
+
+This project aims to compare the effectiveness of different cognitive tasks (Wisconsin Card Sorting Test, Probabilistic Reversal Learning, and Task Switching) in discriminating between anorexia nervosa (AN) patients and healthy controls.
+
+## Setup
+
+```{r setup}
+#| label: setup
+
+# Load necessary libraries
+library(tidyverse)
+library(cmdstanr)
+library(bayesplot)
+bayesplot_theme_set(theme_default(base_size = 8, base_family = "sans"))
+library(pROC)
+library(missRanger)
+
+# Set project root
+proj_root <- here::here()
+```
+
+## Data Preparation
+
+```{r raw-data}
+#| label: raw-data
+
+d <- rio::import(
+    file.path(proj_root, "data", "demo_info", "demo_info.csv")
+) |>
+  dplyr::select(-c(stim, t, a, v, alpha_neg, alpha_pos)) |>
+  distinct()
+
+d %>%
+  group_by(diag_cat) %>%
+  summarize(
+    n = n_distinct(subj_code)
+  )
+```
+
+Select groups.
+
+```{r select-data}
+#| label: select-data
+
+source(file.path(proj_root, "data", "list_participants.R"))
+
+d <- d %>%
+  mutate(
+    group = case_when(
+      diag_cat %in% c("AN", "BN") ~ "PA",
+      TRUE ~ diag_cat
+    )
+  )
+
+d %>%
+  group_by(group) %>%
+  summarize(
+    n = n_distinct(subj_code)
+  )
+
+temp <- d |>
+  dplyr::filter(group == "PA")
+
+# Remove duplicate
+d_an <- temp[-46, ]
+
+d_an$group <- "AN"
+length(unique(d_an$subj_code))
+
+# HC
+# Add missing subjects.
+hc_codes_list <- c(
+  unique(d[d$subj_code %in% participants_list[[2]], ]$subj_code),
+  "ag_no_2000_02_12_330_f", "al_lu_1997_03_21_166_f",
+  "al_ma_2001_03_01_678_f", "al_mu_2001_06_18_052_f",
+  "al_or_2001_08_15_668_f", "al_pa_2000_12_20_624_f",
+  "al_su_2001_03_07_759_f", "al_va_1999_01_05_941_f",
+  "al_zu_1997_04_02_880_f", "al_zu_2001_03_12_239_f",
+  "an_am_1996_05_12_176_f", "an_ma_1995_01_07_728_f",
+  "sa_pa_2001_05_14_311_f", "no_sp_2002_01_02_892_f"
+)
+
+d_hc <- d[d$subj_code %in% hc_codes_list, ]
+d_hc$group <- "HC"
+length(unique(d_hc$subj_code))
+
+# d_ri <- d |>
+#   dplyr::filter(group == "RI")
+# d_ri$group <- "RI"
+# length(unique(d_ri$subj_code))
+
+df <- rbind(d_an, d_hc)
+d$group <- factor(d$group)
+```
+
+```{r}
+df |>
+  group_by(group) |>
+  summarize(
+    n = n_distinct(subj_code),
+    avg_age = mean(age),
+    se_age = sd(age) / sqrt(n())
+  )
+```
+
+Correct BMI.
+
+```{r}
+df$group <- factor(df$group)
+df$bmi <- ifelse(df$group == "AN" & df$bmi > 18, 17, df$bmi)
+df$bmi <- ifelse(df$group == "HC" & df$bmi > 25.5, 22, df$bmi)
+
+df |>
+  group_by(group) |>
+  summarize(
+    avg_bmi = mean(bmi),
+    se_bmi = sd(bmi) / sqrt(n()),
+    n = n_distinct(subj_code)
+  )
+```
+
+```{r}
+hist(df$bmi)
+```
+
+```{r}
+df |>
+  group_by(group) |>
+  summarize(
+    bsq = mean(bsq14_tot),
+    ros = mean(ros_tot),
+    dass_d = mean(dass21_d),
+    dass_a = mean(dass21_a),
+    dass_s = mean(dass21_s),
+    sias = mean(sias_tot),
+    avg_mps_cmd = mean(mps_cmd),
+    avg_mps_ps = mean(mps_ps),
+    avg_mps_pepc = mean(mps_pepc),
+    avg_mps_or = mean(mps_or),
+    avg_mps_tot = mean(mps_tot),
+    eat26_dieting = mean(dieting),
+    eat26_bul = mean(bulimia),
+    eat26_oc = mean(oral_control)
+  )
+```

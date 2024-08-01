@@ -1,0 +1,27 @@
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Task & AUC & 95\% CI \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+WCST & 0.717 & 0.651, 0.763 \\
+PRL & 0.805 & 0.769, 0.827 \\
+TS & 0.752 & 0.713, 0.774 \\
+\end{longtable}
+\efloatseparator
+ 
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Comparison & AUC Difference & 95\% CI \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+PRL vs.~WCST (Behavioral) & 0.114 & 0.042, 0.216 \\
+PRL vs.~TS (Behavioral) & -0.0111 & -0.044, 0.0183 \\
+TS vs.~WCST (Behavioral) & 0.125 & 0.0575, 0.225 \\
+PRL vs.~WCST (Computational) & 0.0879 & 0.0294, 0.158 \\
+PRL vs.~TS (Computational) & 0.0529 & 0.00988, 0.0984 \\
+TS vs.~WCST (Computational) & 0.0350 & -0.0252, 0.106 \\
+\end{longtable}

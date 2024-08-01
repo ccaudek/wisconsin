@@ -2,6 +2,7 @@
 library("here")
 library("tidyverse")
 library("brms")
+library("mice")
 
 
 prl_dat <- readRDS(
@@ -79,6 +80,20 @@ win_stay_lose_shift <- d1_imp |>
 hist(win_stay_lose_shift$win_stay)
 hist(win_stay_lose_shift$lose_shift)
 hist(win_stay_lose_shift$e_pers)
+
+# Generate data for AUC classification with Stan --------------------------
+for_classification_df <- win_stay_lose_shift |> 
+  dplyr::select(-subj_name) |> 
+  dplyr::filter(group != "RI")
+
+for_classification_df$is_patient <- 
+  ifelse(for_classification_df$group == "AN", 1, 0)
+for_classification_df$group <- NULL
+
+rio::export(
+  for_classification_df, 
+  "src/stan_auc/models_params/prl_behav_indices.csv"
+)
 
 
 mod_ws <- brm(

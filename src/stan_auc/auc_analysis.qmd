@@ -1,0 +1,379 @@
+---
+title: "WCST, PRL, and Task Switching for Discriminating AN Patients and Healthy Controls"
+subtitle: "AUC analysis"
+author: "Corrado Caudek"
+date: "2024-07-27"
+format: 
+  html:
+    theme: cosmo
+    df-print: kable
+    code-fold: false
+    code-tools: true
+    toc: true
+    toc-location: right
+    number-depth: 3
+execute:
+  echo: true
+editor: source
+number-sections: true
+embed-resources: true
+editor_options: 
+  chunk_output_type: console
+---
+
+## Project Overview
+
+This project aims to compare the effectiveness of different cognitive tasks (Wisconsin Card Sorting Test, Probabilistic Reversal Learning, and Task Switching) in discriminating between anorexia nervosa (AN) patients and healthy controls.
+
+## Setup
+
+```{r setup}
+#| label: setup
+#| warning: false
+#| output: false
+
+# Load necessary libraries
+library(tidyverse)
+library(cmdstanr)
+library(bayesplot)
+bayesplot_theme_set(theme_default(base_size = 8, base_family = "sans"))
+library(pROC)
+library(missRanger)
+
+# Set project root
+proj_root <- here::here()
+```
+
+## Data Preparation
+
+### 1. WCST Steinke Parameters
+
+The predictors are the individual coefficients of Steinke's model applied to the WCST. The model's coefficients for each participant have been obtained with a hierarchical Bayesian model.
+
+```{r wcst-data}
+#| label: wcst-data
+
+data1 <- rio::import(
+    file.path(proj_root, "src", "stan_auc", "models_params", "wcst_steinke_params.csv")
+) |>
+    dplyr::select(-index) |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+### 2. PRL hDDMrl Parameters
+
+The predictors are the individual coefficients of hDDMrl model applied to the PRL task. The model's coefficients for each participant have been obtained with the hDDMrl Python module.
+
+```{r prl-data}
+#| label: prl-data
+
+data2 <- rio::import(
+    file.path(proj_root, "src", "stan_auc", "models_params", "prl_params.csv")
+) |>
+    dplyr::select(-index) |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+### 3. WCST Behavioral Indices
+
+The beahavioral indices have been obtained from the empirical data of the two groups.
+
+```{r behav-data}
+#| label: behav-data
+#| warning: false
+#| output: false
+
+data3 <- rio::import(
+    file.path(proj_root, "src", "stan_auc", "models_params", "wcst_behav_indices.csv")
+) |>
+    mutate(is_patient = ifelse(group == "an", 1, 0)) |>
+    dplyr::select(-c(subj_name, group))
+
+# Impute missing values
+data3 <- missRanger(data3, pmm.k = 5, num.trees = 100)
+
+# Standardize
+data3 <- data3 |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+## Task Switching DDM Parameters 
+
+```{r ts-ddm-params}
+#| label: ts-ddm-params
+
+data4 <- rio::import(
+    file.path(proj_root, "src", "stan_auc", "models_params",
+              "task_switching_params.csv")
+) |>
+    dplyr::select(-subj_idx)
+
+data4 <- data4 %>%
+    select(-is_patient, everything(), is_patient)
+
+# Standardize
+data4 <- data4 |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+## Task Switching Behavioral Indices
+
+```{r ts-behav-indices}
+#| label: ts-behav-indices
+
+data5 <- rio::import(
+    file.path(proj_root, "src", "stan_auc", "models_params",
+              "task_switching_behav_indices.csv")
+) |>
+    dplyr::rename(
+        "cost_resp_rep" = "repetition",
+        "cost_resp_switch" = "switch"
+    )
+
+# Standardize
+data5 <- data5 |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+## PRL Behavioral Indices
+
+```{r prl-behav-indices}
+#| label: prl-behav-indices
+
+data6 <- rio::import(
+    file.path(
+        proj_root, "src", "stan_auc", "models_params",
+        "prl_behav_indices.csv"
+    )
+)
+
+# Standardize
+data6 <- data6 |>
+    mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
+```
+
+
+## Stan Model Preparation
+
+Generate an R list as required for the Stan model.
+
+```{r stan-data}
+#| label: stan-data
+
+stan_data <- list(
+    N1 = nrow(data1),
+    N2 = nrow(data2),
+    N3 = nrow(data3),
+    N4 = nrow(data4),
+    N5 = nrow(data5),
+    N6 = nrow(data6),
+    #
+    K1 = 8,
+    K2 = 5,
+    K3 = 3,
+    K4 = 6,
+    K5 = 2,
+    K6 = 3,
+    #
+    X1 = as.matrix(data1[, c(
+        "MB_Arew", "MB_Apun", "MB_gamma", "MF_Arew",
+        "MF_Apun", "MF_gamma", "temp", "w"
+    )]),
+    X2 = as.matrix(data2[, c("a", "alpha", "pos_alpha", "t", "v")]),
+    X3 = as.matrix(data3[, c(
+        "prop_pers_err", "prop_non_pers_err", "prop_pers_resp"
+    )]),
+    X4 = as.matrix(data4[, c("a_0", "a_1", "v_0", "v_1", "t_0", "t_1")]),
+    X5 = as.matrix(data5[, c("cost_resp_rep", "cost_resp_switch")]),
+    X6 = as.matrix(data6[, c("win_stay", "lose_shift", "e_pers")]),
+    #
+    y1 = data1$is_patient,
+    y2 = data2$is_patient,
+    y3 = data3$is_patient,
+    y4 = data4$is_patient,
+    y5 = data5$is_patient,
+    y6 = data6$is_patient
+)
+```
+
+## Model Fitting
+
+The Stan model computes the AUC for discriminating patients from control with logistic regression, separately for three models with different sets of predictors. The Stan model then computes the difference in the posterior AUC estimates between the results of the PRL model and the WCST Steinke's model (`auc_diff1`), and between the results of the WCST Steinke's model and the behavioral indices (`auc_diff2`).
+
+```{r fit-model}
+#| label: fit-model
+#| warning: false
+#| output: false
+
+model_path <- file.path(
+    proj_root, "src", "stan_auc",
+    "auc_3model_comparison.stan"
+)
+model <- cmdstan_model(model_path)
+
+fit <- model$sample(
+    data = stan_data,
+    seed = 123,
+    chains = 4,
+    parallel_chains = 4,
+    iter_warmup = 20000,
+    iter_sampling = 20000
+)
+```
+
+## Results Analysis
+
+```{r analyze-results}
+#| label: analyze-results
+
+posterior <- fit$draws(
+    c(
+        "auc1", "auc2", "auc3", "auc4", "auc5", "auc6",
+        "auc_diff_params_prl_wcst",
+        "auc_diff_params_prl_ts",
+        "auc_diff_params_ts_wcst",
+        #
+        "auc_diff_behav_indices_prl_wcst",
+        "auc_diff_behav_indices_prl_ts",
+        "auc_diff_behav_indices_ts_wcst",
+        #
+        "auc_diff_params_indices_prl",
+        "auc_diff_params_indices_wcst",
+        "auc_diff_params_indices_ts"
+    ),
+    format = "df"
+)
+
+summary <- posterior |>
+    pivot_longer(everything(), names_to = "parameter", values_to = "value") |>
+    group_by(parameter) |>
+    summarize(
+        mean = mean(value),
+        median = median(value),
+        sd = sd(value),
+        q2.5 = quantile(value, 0.025),
+        q97.5 = quantile(value, 0.975)
+    )
+
+print(summary)
+```
+
+## Visualization
+
+```{r visualize-results}
+#| label: visualize-results
+
+ggplot(posterior, aes(x = auc_diff_params_prl_wcst)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters PRL) - AUC(Parameters WCST)",
+        y = "Density"
+    )
+
+ggplot(posterior, aes(x = auc_diff_params_prl_ts)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters PRL) - AUC(Parameters TS)",
+        y = "Density"
+    )
+
+ggplot(posterior, aes(x = auc_diff_params_ts_wcst)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters TS) - AUC(Parameters WCST)",
+        y = "Density"
+    )
+
+# --
+ggplot(posterior, aes(x = auc_diff_behav_indices_prl_wcst)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Behavioral Indices PRL) - AUC(Behavioral Indices WCST)",
+        y = "Density"
+    )
+ggplot(posterior, aes(x = auc_diff_behav_indices_prl_ts)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Behavioral Indices PRL) - AUC(Behavioral Indices TS)",
+        y = "Density"
+    )
+ggplot(posterior, aes(x = auc_diff_behav_indices_ts_wcst)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Behavioral Indices TS) - AUC(Behavioral Indices WCST)",
+        y = "Density"
+    )
+
+# --
+ggplot(posterior, aes(x = auc_diff_params_indices_prl)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters PRL) - AUC(Behavioral Indices PRL)",
+        y = "Density"
+    )
+ggplot(posterior, aes(x = auc_diff_params_indices_wcst)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters WCST) - AUC(Behavioral Indices WCST)",
+        y = "Density"
+    )
+ggplot(posterior, aes(x = auc_diff_params_indices_ts)) +
+    geom_density(fill = "lightblue", alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Posterior Distribution of AUC Difference",
+        x = "AUC(Parameters TS) - AUC(Behavioral Indices TS)",
+        y = "Density"
+    )
+```
+
+## Conclusion
+
+```{r conclusion}
+#| label: conclusion
+
+prob_auc_diff_params_prl_wcst_pos <-
+    mean(posterior$auc_diff_params_prl_wcst > 0)
+
+cat(
+    "Probability that PRL params outperforms WCST params:",
+    prob_auc_diff_params_prl_wcst_pos, "\n"
+)
+
+prob_auc_diff_params_prl_ts_pos <-
+    mean(posterior$auc_diff_params_prl_ts > 0)
+
+cat(
+    "Probability that PRL params outperforms TS params:",
+    prob_auc_diff_params_prl_ts_pos, "\n"
+)
+
+
+prob_auc_diff_params_indices_ts_pos <-
+    mean(posterior$auc_diff_params_indices_ts > 0)
+
+cat(
+    "Probability that TS params outperforms TS behav indices:",
+    prob_auc_diff_params_indices_ts_pos, "\n"
+)
+
+
+```
+
+This analysis compares the effectiveness of different cognitive tasks in discriminating between AN patients and healthy controls. [Add your interpretation of the results here.]
