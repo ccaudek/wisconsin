@@ -30,9 +30,9 @@ source(here::here("src", "functions", "funs_input_for_stan_wcst.R"))
 # Generate RDS raw data for patients or controls -------------------------------
 
 # Select group.
-GROUP <- "controls"  # "controls" "patients"
+GROUP <- "patients"  # "controls" "patients"
 
-dir <- here("data", "raw", "wcst", GROUP)
+dir <- here("data", "raw", GROUP)
 
 if (GROUP == "patients") {
   file_names <- as.character(list.files(path=dir, pattern="wcst_pazienti"))
@@ -48,7 +48,7 @@ d_list <- list()
 for (i in 1:n_files) {
   
   d  <- read.table(
-    here("data", "raw", "wcst", GROUP, file_names[i]), 
+    here("data", "raw", GROUP, file_names[i]), 
     header = FALSE
   )
   
@@ -106,6 +106,9 @@ df <- df %>%
   )
 
 length(unique(df$subj_name))
+# [1] 56
+
+unique(df$subj_name) |> sort()
 
 if (GROUP == "patients") {
   saveRDS(
@@ -130,10 +133,11 @@ if (GROUP == "patients") {
 # participants_list[[3]] <- ri
 source(
   here::here(
-    "src", "python", "PRL_AND_WCST", "01_get_hddmrl_params", 
-    "list_participants.R"
+    "data", "list_participants.R"
   )
 )
+
+
 
 
 # Generate the input list for cmdstan ------------------------------------------

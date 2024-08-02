@@ -56,7 +56,9 @@ stan_data <- readRDS(
 # file <- file.path("src", "wcst", "models", "stan", "04_PRL.stan") 
 # file <- file.path("src", "wcst", "models", "stan", "05_MBRL_without_inertia.stan") #
 # file <- file.path("src", "wcst", "models", "stan", "06_PRL_without_inertia.stan")
-file <- file.path("src", "wcst", "models", "stan", "07_PRL_weighting.stan") 
+file <- file.path(
+  "src", "wcst_model_selection", "documentation", "stan", "07_PRL_weighting.stan"
+  ) 
 # file <- file.path("src", "wcst", "models", "stan", "07bis_PRL_weighting.stan") 
 # file <- file.path("src", "wcst", "models", "stan", "08_PRL_weighting_without_inertia.stan") 
 
@@ -230,27 +232,14 @@ mydat <- traces_wide_df |>
   dplyr::select(-subj_idx)
 
 
-
-
 fit <- glm(
   is_patient ~ MB_Apun + MB_Arew + MB_gamma + MF_Apun + MF_gamma + w + temp, 
   family = binomial(),
-  data = mydat
+  data = mydat[1:91, ]
 )
 
 test_prob = predict(fit, newdata = mydat, type = "response")
 test_roc = roc(mydat$is_patient ~ test_prob, plot = TRUE, print.auc = TRUE)
-
-
-
-
-log_lik <- fit_mcmc$draws("log_lik", format = "matrix")
-
-library(loo)
-
-waic_result <- waic(log_lik)
-print(waic_result)
-
 
 
 

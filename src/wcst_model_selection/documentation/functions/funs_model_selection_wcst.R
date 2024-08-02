@@ -1,12 +1,11 @@
-
+# Functions used for WCST Steinke's model selection
 
 # gen_correspondence_table_codes() ----------------------------------------
 
-
 #' @description 
-#' by using the information in the Excel file, generates a correspondence table
-#' which associates the codes used by psytoolkit with the codes used in the
-#' questionnaires
+#' by using the information in the Excel file, generates a correspondence 
+#' table which associates the codes used by psytoolkit with the codes used 
+#' in the questionnaires
 #' @return data.frame.
 gen_correspondence_table_codes <- function(GROUP) {
   
@@ -24,7 +23,7 @@ gen_correspondence_table_codes <- function(GROUP) {
 
 
 # read_excel_code() -------------------------------------------------------
-
+#' Reads the Excel file in the raw data folder for each GROUP
 
 #' @description 
 #' read Excel file.
