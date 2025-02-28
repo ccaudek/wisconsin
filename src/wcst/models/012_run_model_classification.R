@@ -60,6 +60,7 @@ file <- file.path("src", "wcst", "models", "stan", "07_PRL_weighting.stan")
 # file <- file.path("src", "wcst", "models", "stan", "07bis_PRL_weighting.stan") 
 # file <- file.path("src", "wcst", "models", "stan", "08_PRL_weighting_without_inertia.stan") 
 
+# file <- file.path("src", "wcst", "models", "stan", "revised_07_c.stan") 
 
 # Parmeters of interest
 # params_mod1 <- c("mu_r", "mu_p", "mu_d", "mu_i", "r", "p", "d", "i")
@@ -118,10 +119,12 @@ mod <- cmdstan_model(file, compile = FALSE)
 # overwrite the original file instead of just printing it
 mod$format(canonicalize = list("deprecations"), overwrite_file = TRUE)
 
-# compile model44850
+
+
+# compile model
 mod <- cmdstan_model(file)
 
-# mod$print()
+mod$print()
 # mod$exe_file()
 
 if (0) {
@@ -139,7 +142,7 @@ if (0) {
 
 
 # Read the object.
-fit_qs <- qs::qread(
+fit_vi <- qs::qread(
   here::here(
     "src", "wcst", "models", "traces", "fit_steinke_mod7.qs"
   )
@@ -153,89 +156,8 @@ if (0) {
   )
 }
 
-draws <- fit_qs$draws(variables = params_mod7, format = "data.frame")
+draws <- fit_vi$draws(variables = params_mod7, format = "data.frame")
 # draws <- fit_mcmc$draws(variables = params_mod7, format = "data.frame")
-
-
-# PP-Check ----------------------------------------------------------------
-
-y_pred <- fit_qs$draws(variables = "y_pred", format = "draws_matrix")
-
-# read raw data
-two_groups_df <- rio::import(
-  here::here(
-    "data", "processed", "wcst", "raw_2grps_4classification.csv"
-  )
-)
-
-# Extract observed data
-y_obs <- two_groups_df$chosen_card
-
-set.seed(123)
-selected_indices <- sample(nrow(y_pred), 50)
-ppc_dens_overlay(y = y_obs, yrep = y_pred[selected_indices, ])
-
-
-# Comparison of the estimates obtained with MCMC and VI -------------------
-
-# # Randomly sample 5 indices from the total number of subjects
-# set.seed(123) # For reproducibility
-# sampled_indices <- sample(1:stan_data$N, 5)
-# 
-# # Subset the data for these indices
-# stan_data_sample <- list(
-#   N = length(sampled_indices),
-#   T = stan_data$T,
-#   Tsubj = stan_data$Tsubj[sampled_indices],
-#   holdout = stan_data$holdout[sampled_indices],
-#   group = stan_data$group[sampled_indices],
-#   rew = stan_data$rew[sampled_indices, , drop = FALSE],
-#   los = stan_data$los[sampled_indices, , drop = FALSE],
-#   rule_choice = stan_data$rule_choice[sampled_indices, , drop = FALSE],
-#   resp_choice = stan_data$resp_choice[sampled_indices, , drop = FALSE],
-#   resp_color = stan_data$resp_color[sampled_indices, , drop = FALSE],
-#   resp_shape = stan_data$resp_shape[sampled_indices, , drop = FALSE],
-#   resp_number = stan_data$resp_number[sampled_indices, , drop = FALSE]
-# )
-# 
-# # Check the structure of the sampled data
-# str(stan_data_sample)
-# 
-# fit_mcmc <- mod$sample(
-#   data = stan_data_sample,
-#   seed = 123,
-#   chains = 4,
-#   parallel_chains = 4,
-#   refresh = 50 # print update every 500 iters
-# )
-# 
-# draws <- fit_mcmc$draws(variables = params_mod7, format = "data.frame")
-# 
-# # Trasforma i dati in un formato lungo per facilitare il calcolo delle medie per soggetto
-# draws_long <- draws %>%
-#   pivot_longer(cols = starts_with("mu_"), names_to = "parameter", values_to = "value")
-# 
-# 
-# # Estrai l'indice del soggetto da ogni parametro e calcola la media
-# draws_long <- draws_long %>%
-#   mutate(subject = str_extract(parameter, "\\[\\d+\\]") %>% str_remove_all("\\[|\\]"),
-#          parameter = str_remove(parameter, "\\[\\d+\\]")) %>%
-#   group_by(subject, parameter) %>%
-#   summarise(mean_value = mean(value, na.rm = TRUE),
-#             sd_value = sd(value, na.rm = TRUE),
-#             lower_95 = quantile(value, 0.025, na.rm = TRUE),
-#             upper_95 = quantile(value, 0.975, na.rm = TRUE),
-#             .groups = 'drop')
-# 
-# # View the result
-# print(draws_long)
-# 
-# # With a small number of subjects the estimates are too unreliable!
-# # Such an analysis is useless.
-
-
-# -------------------------------------------------------------------------
-
 
 # Trasforma i dati in un formato lungo per facilitare il calcolo delle medie per soggetto
 draws_long <- draws %>%
@@ -254,7 +176,31 @@ draws_long <- draws_long %>%
             .groups = 'drop')
 
 # View the result
-print(draws_long)
+draws_long %>% tibble::as_tibble() %>% print(n=500)
+
+
+
+
+# Trasforma i dati in un formato lungo per facilitare il calcolo delle medie per soggetto
+draws_long <- draws %>%
+  pivot_longer(cols = !starts_with("mu_"), names_to = "parameter", values_to = "value")
+
+
+# Estrai l'indice del soggetto da ogni parametro e calcola la media
+draws_long <- draws_long %>%
+  mutate(subject = str_extract(parameter, "\\[\\d+\\]") %>% str_remove_all("\\[|\\]"),
+         parameter = str_remove(parameter, "\\[\\d+\\]")) %>%
+  group_by(subject, parameter) %>%
+  summarise(mean_value = mean(value, na.rm = TRUE),
+            sd_value = sd(value, na.rm = TRUE),
+            lower_95 = quantile(value, 0.025, na.rm = TRUE),
+            upper_95 = quantile(value, 0.975, na.rm = TRUE),
+            .groups = 'drop')
+
+# View the result
+draws_long %>% tbl_df %>% print(n=200)
+
+
 
 
 
@@ -265,7 +211,7 @@ print(draws_long)
 # Get names parameters
 params <- names(mod$variables()$parameters)
 
-fit_mcmc$summary(
+fit_vi$summary(
   variables = params,
   posterior::default_summary_measures(),
   extra_quantiles = ~posterior::quantile2(., probs = c(.0275, .975))

@@ -54,9 +54,12 @@ The predictors are the individual coefficients of Steinke's model applied to the
 #| label: wcst-data
 
 data1 <- rio::import(
-    file.path(proj_root, "src", "stan_auc", "models_params", "wcst_steinke_params.csv")
-) |>
-    dplyr::select(-index) |>
+    file.path(
+      proj_root, 
+      "src", "stan_auc", "models_params", "wcst_steinke_rev_params.csv"
+    )
+  ) |>
+    # dplyr::select(-index) |>
     mutate(across(-is_patient, ~ scale(.) |> as.numeric()))
 ```
 
@@ -109,7 +112,7 @@ data4 <- rio::import(
     dplyr::select(-subj_idx)
 
 data4 <- data4 %>%
-    select(-is_patient, everything(), is_patient)
+    dplyr::select(-is_patient, everything(), is_patient)
 
 # Standardize
 data4 <- data4 |>

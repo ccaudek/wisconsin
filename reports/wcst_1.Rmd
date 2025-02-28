@@ -173,7 +173,7 @@ This probabilistic approach provides several advantages, including the ability t
 
 The primary objective of this study was to evaluate the efficacy of three behavioral tasks—Wisconsin Card Sorting Task (WCST), Probabilistic Reversal Learning (PRL) task, and Task Switching (TS) task—in measuring cognitive rigidity in anorexic (AN) patients compared to healthy controls. Behavioral indices were computed for each task and subsequently analyzed using logistic regression models to differentiate between the two groups.
 
-The Area Under the Curve (AUC) values, which represent the discriminatory power of each task, are presented in Table 1. The WCST, commonly used in cognitive rigidity studies, yielded an AUC of 0.717 (95% CI: 0.651, 0.763). In comparison, the PRL task, which measures reinforcement learning, achieved a higher AUC of 0.805 (95% CI: 0.769, 0.827). The TS task, measuring pure task-switching abilities, showed an AUC of 0.752 (95% CI: 0.713, 0.774).
+The Area Under the Curve (AUC) values, which represent the discriminatory power of each task, are presented in Table 1. The WCST, commonly used in cognitive rigidity studies, yielded an AUC of 0.645 (95% CI: 0.546, 0.709). In comparison, the PRL task, which measures reinforcement learning, achieved a higher AUC of 0.759 (95% CI: 0.728, 0.771). The TS task, measuring pure task-switching abilities, showed an AUC of 0.770 (95% CI: 0.745, 0.778).
 
 #### Comparison of Behavioral Indices
 

@@ -16,7 +16,7 @@
 # resp_choice rew resp_color resp_shape resp_number
 
 
-# Load necessary libraries ------------------------------------------------
+# Load necessary libraries.
 
 suppressPackageStartupMessages({
   library("tidyverse")
@@ -32,7 +32,7 @@ suppressPackageStartupMessages({
 })
 
 
-# Source functions -------------------------------------------------------------
+# ---- Source functions ---- #
 
 source(here::here(
   "src", "wcst_model_selection", "documentation", "functions", "funs_wcst.R")
@@ -50,7 +50,8 @@ source(
   )
 
 
-# Data wrangling
+# ---- Data wrangling ---- #
+
 generate_csv("controls")
 generate_csv("patients")
 
@@ -58,9 +59,7 @@ generate_csv("patients")
 stan_data <- process_and_prepare_stan_data()
 
 
-
-# Chose model -------------------------------------------------------------
-
+# ---- Chose model ---- #
 
 # Define the flag for model selection
 model_flag <- 1 # Change this value to choose a different model
@@ -117,8 +116,7 @@ print(paste("Chosen model file:", file))
 print("Parameters:")
 print(params_mod)
 
-
-# Fix old syntax ---------------------------------------------------------------
+# Fix old syntax.
 # The original stan files are written with an old syntax.
 # To fix them, follow the instructions here:
 # https://mc-stan.org/cmdstanr/reference/model-method-format.html
@@ -129,11 +127,10 @@ mod <- cmdstan_model(file, compile = FALSE)
 # overwrite the original file instead of just printing it
 mod$format(canonicalize = list("deprecations"), overwrite_file = TRUE)
 
-# Compile model ----------------------------------------------------------------
+# Compile model.
 mod <- cmdstan_model(file)
 
-
-# Sampling ---------------------------------------------------------------------
+# Sampling.
 if (0) {
   fit_mcmc <- mod$sample(
     data = stan_data,
@@ -150,7 +147,10 @@ fit <- mod$pathfinder(
   seed = 1234
 )
 
-# Save fit -- change the name of the output file!!
+
+# ---- Save fit ---- #
+
+# Change the name of the output file!!
 fit$save_object(
   file = here::here("src", "wcst_model_selection", "data", "fits", "fit1.RDS")
 )
@@ -159,8 +159,8 @@ fit <- readRDS(
   here::here("src", "wcst_model_selection", "data", "fits", "fit7_OLD.RDS")
 )
 
+# ---- Get individual parameters ---- #
 
-# Get individual parameters ----------------------------------------------------
 draws <- fit$draws(variables = params_mod, format = "data.frame")
 
 # Trasforma i dati in un formato lungo per facilitare il calcolo delle medie per soggetto
@@ -228,7 +228,6 @@ traces_wide_df$is_patient <- ifelse(traces_wide_df$subj_idx < 46, 1, 0)
 mydat <- traces_wide_df |> 
   dplyr::select(-subj_idx)
 
-
 # Convert the vector to a single string with parameters separated by '+'
 params_string <- paste(params, collapse = " + ")
 
@@ -243,7 +242,6 @@ fm <- glm(formula, family = binomial(), data = mydat)
 
 test_prob = predict(fm, newdata = mydat, type = "response")
 test_roc = roc(mydat$is_patient ~ test_prob, plot = TRUE, print.auc = TRUE)
-
 
 # Compute WAIC -----------------------------------------------------------------
 log_lik <- fit$draws("log_lik", format = "matrix")

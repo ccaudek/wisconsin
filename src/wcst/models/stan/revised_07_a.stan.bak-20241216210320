@@ -1,0 +1,134 @@
+// Improved Stan model to address misfit issues
+data {
+  int<lower=1> N; // Number of subjects
+  int<lower=1> T; // Number of trials
+  array[N] int<lower=1, upper=T> Tsubj; // Trials per subject
+  array[N] int<lower=0, upper=1> holdout; // Holdout indicator
+  
+  array[N, T] real rew;
+  array[N, T] real los;
+  
+  array[N, T] int rule_choice;
+  array[N, T] int resp_choice;
+  
+  array[N, T] int resp_color;
+  array[N, T] int resp_shape;
+  array[N, T] int resp_number;
+}
+parameters {
+  // Hyperparameters
+  vector[8] mu_p;
+  vector<lower=0>[8] sigma;
+  
+  // Raw subject-level parameters (non-centered parameterization)
+  vector[N] MB_Arew_pr;
+  vector[N] MB_Apun_pr;
+  vector[N] MB_gamma_pr;
+  
+  vector[N] MF_Arew_pr;
+  vector[N] MF_Apun_pr;
+  vector[N] MF_gamma_pr;
+  
+  vector[N] temp_pr;
+  vector[N] w_pr;
+}
+transformed parameters {
+  // Transformed subject-level parameters
+  vector<lower=0, upper=1>[N] MB_Arew;
+  vector<lower=0, upper=1>[N] MB_Apun;
+  vector<lower=0, upper=1>[N] MB_gamma;
+  
+  vector<lower=0, upper=1>[N] MF_Arew;
+  vector<lower=0, upper=1>[N] MF_Apun;
+  vector<lower=0, upper=1>[N] MF_gamma;
+  
+  vector<lower=0>[N] temp;
+  vector<lower=0, upper=1>[N] w;
+  
+  for (i in 1 : N) {
+    MB_Arew[i] = inv_logit(mu_p[1] + sigma[1] * MB_Arew_pr[i]);
+    MB_Apun[i] = inv_logit(mu_p[2] + sigma[2] * MB_Apun_pr[i]);
+    MB_gamma[i] = inv_logit(mu_p[3] + sigma[3] * MB_gamma_pr[i]);
+    
+    MF_Arew[i] = inv_logit(mu_p[4] + sigma[4] * MF_Arew_pr[i]);
+    MF_Apun[i] = inv_logit(mu_p[5] + sigma[5] * MF_Apun_pr[i]);
+    MF_gamma[i] = inv_logit(mu_p[6] + sigma[6] * MF_gamma_pr[i]);
+    
+    temp[i] = exp(mu_p[7] + sigma[7] * temp_pr[i]); // Log-normal prior for temp
+    w[i] = inv_logit(mu_p[8] + sigma[8] * w_pr[i]);
+  }
+}
+model {
+  // Priors on hyperparameters
+  mu_p ~ normal(0, 1); // Centered priors for group means
+  sigma ~ normal(0, 2); // Regularized priors for variability
+  
+  // Priors on individual-level raw parameters
+  MB_Arew_pr ~ normal(0, 1);
+  MB_Apun_pr ~ normal(0, 1);
+  MB_gamma_pr ~ normal(0, 1);
+  
+  MF_Arew_pr ~ normal(0, 1);
+  MF_Apun_pr ~ normal(0, 1);
+  MF_gamma_pr ~ normal(0, 1);
+  
+  temp_pr ~ normal(0, 1); // Log-normal prior implicitly applied
+  w_pr ~ normal(0, 1);
+  
+  // Likelihood
+  for (i in 1 : N) {
+    if (holdout[i] == 0) {
+      vector[4] Qeff;
+      vector[3] QMB;
+      vector[4] QMF;
+      vector[3] PEMB;
+      vector[4] PEMF;
+      
+      Qeff = rep_vector(0.0, 4);
+      QMB = rep_vector(0.0, 3);
+      QMF = rep_vector(0.0, 4);
+      
+      for (t in 1 : Tsubj[i]) {
+        Qeff = rep_vector(-1.0, 4);
+        Qeff[resp_color[i, t]] = w[i] * QMB[1];
+        Qeff[resp_shape[i, t]] += w[i] * QMB[2];
+        Qeff[resp_number[i, t]] += w[i] * QMB[3];
+        Qeff += (1 - w[i]) * QMF;
+        
+        Qeff = softmax(Qeff / temp[i]); // Apply softmax with temp
+        resp_choice[i, t] ~ categorical(Qeff);
+        
+        QMB *= MB_gamma[i];
+        QMF *= MF_gamma[i];
+        
+        PEMB = rep_vector(0.0, 3);
+        PEMF = rep_vector(0.0, 4);
+        PEMB[rule_choice[i, t]] = (rew[i, t] + los[i, t])
+                                  - QMB[rule_choice[i, t]];
+        PEMF[resp_choice[i, t]] = (rew[i, t] + los[i, t])
+                                  - QMF[resp_choice[i, t]];
+        
+        if (rew[i, t] == 1) {
+          QMB += MB_Arew[i] * PEMB;
+          QMF += MF_Arew[i] * PEMF;
+        } else {
+          QMB += MB_Apun[i] * PEMB;
+          QMF += MF_Apun[i] * PEMF;
+        }
+      }
+    }
+  }
+}
+generated quantities {
+  // Group-level means for reporting
+  real<lower=0, upper=1> mu_MB_Arew = inv_logit(mu_p[1]);
+  real<lower=0, upper=1> mu_MB_Apun = inv_logit(mu_p[2]);
+  real<lower=0, upper=1> mu_MB_gamma = inv_logit(mu_p[3]);
+  
+  real<lower=0, upper=1> mu_MF_Arew = inv_logit(mu_p[4]);
+  real<lower=0, upper=1> mu_MF_Apun = inv_logit(mu_p[5]);
+  real<lower=0, upper=1> mu_MF_gamma = inv_logit(mu_p[6]);
+  
+  real<lower=0> mu_temp = exp(mu_p[7]);
+  real<lower=0, upper=1> mu_w = inv_logit(mu_p[8]);
+}
