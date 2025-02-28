@@ -1,0 +1,203 @@
+// Simplified Wisconsin Card Sorting Task RL Model
+// With hierarchical structure and robust priors
+data {
+  int<lower=1> N; // Number of subjects
+  int<lower=1> T; // Maximum number of trials
+  array[N] int<lower=1, upper=T> Tsubj; // Trials per subject
+  array[N] int<lower=0, upper=1> holdout; // Holdout indicator
+  
+  array[N, T] real rew; // Reward values
+  array[N, T] real los; // Loss values
+  
+  array[N, T] int rule_choice; // Rule choices
+  array[N, T] int resp_choice; // Response choices
+  
+  array[N, T] int resp_color; // Color responses
+  array[N, T] int resp_shape; // Shape responses
+  array[N, T] int resp_number; // Number responses
+}
+parameters {
+  // Group-level parameters - using a joint learning rate approach
+  vector[4] mu_pr; // Group means on unconstrained scale
+  vector<lower=0>[4] sigma_pr; // Group standard deviations
+  
+  // Subject-level parameters (non-centered)
+  vector[N] alpha_MB_z; // Model-based learning rate
+  vector[N] alpha_MF_z; // Model-free learning rate
+  vector[N] gamma_z; // Common decay rate 
+  vector[N] inv_temp_z; // Inverse temperature
+  
+  // Weight parameter for balancing MB vs MF
+  vector<lower=0, upper=1>[N] w; // Weight for model-based vs model-free
+}
+transformed parameters {
+  // Subject-level parameters on their natural scales
+  vector<lower=0, upper=1>[N] alpha_MB; // Model-based learning rate
+  vector<lower=0, upper=1>[N] alpha_MF; // Model-free learning rate
+  vector<lower=0, upper=1>[N] gamma; // Decay rate 
+  vector<lower=0>[N] inv_temp; // Inverse temperature
+  
+  // Apply transformations
+  for (i in 1 : N) {
+    alpha_MB[i] = inv_logit(mu_pr[1] + sigma_pr[1] * alpha_MB_z[i]);
+    alpha_MF[i] = inv_logit(mu_pr[2] + sigma_pr[2] * alpha_MF_z[i]);
+    gamma[i] = inv_logit(mu_pr[3] + sigma_pr[3] * gamma_z[i]);
+    inv_temp[i] = exp(mu_pr[4] + sigma_pr[4] * inv_temp_z[i]);
+  }
+}
+model {
+  // Priors for group-level parameters
+  mu_pr[1 : 3] ~ normal(0, 1); // For parameters bounded between 0 and 1
+  mu_pr[4] ~ normal(0, 1); // For inverse temperature (log scale)
+  
+  // Using half-normal priors for variance components
+  sigma_pr ~ normal(0, 0.5);
+  
+  // Priors for subject-level parameters
+  alpha_MB_z ~ std_normal();
+  alpha_MF_z ~ std_normal();
+  gamma_z ~ std_normal();
+  inv_temp_z ~ std_normal();
+  
+  // Prior for weighting parameter
+  w ~ beta(2, 2); // Slightly favors balanced weights
+  
+  // Likelihood
+  for (i in 1 : N) {
+    if (holdout[i] == 0) {
+      // Model variables
+      vector[4] Q_total; // Combined Q-values
+      vector[3] Q_MB; // Model-based Q values
+      vector[4] Q_MF; // Model-free Q values
+      
+      // Initialize Q-values to zeros
+      Q_MB = rep_vector(0.0, 3);
+      Q_MF = rep_vector(0.0, 4);
+      
+      for (t in 1 : Tsubj[i]) {
+        // Skip if this is missing data (indicated by resp_choice == 0)
+        if (resp_choice[i, t] > 0) {
+          // Map Q-values to response options
+          Q_total = rep_vector(-10.0, 4); // Large negative value for invalid choices
+          
+          // Set valid response options to appropriate values
+          if (resp_color[i, t] > 0) 
+            Q_total[resp_color[i, t]] = 0.0;
+          if (resp_shape[i, t] > 0) 
+            Q_total[resp_shape[i, t]] = 0.0;
+          if (resp_number[i, t] > 0) 
+            Q_total[resp_number[i, t]] = 0.0;
+          
+          // Add contribution from model-based component
+          if (resp_color[i, t] > 0) 
+            Q_total[resp_color[i, t]] += w[i] * Q_MB[1];
+          if (resp_shape[i, t] > 0) 
+            Q_total[resp_shape[i, t]] += w[i] * Q_MB[2];
+          if (resp_number[i, t] > 0) 
+            Q_total[resp_number[i, t]] += w[i] * Q_MB[3];
+          
+          // Add contribution from model-free component
+          Q_total += (1 - w[i]) * Q_MF;
+          
+          // Calculate choice probability using softmax
+          target += categorical_logit_lpmf(resp_choice[i, t] | inv_temp[i]
+                                                               * Q_total);
+          
+          // Get reward
+          real outcome = rew[i, t] + los[i, t];
+          
+          // Calculate prediction errors
+          real PE_MB = outcome - Q_MB[rule_choice[i, t]];
+          real PE_MF = outcome - Q_MF[resp_choice[i, t]];
+          
+          // Update Q-values
+          Q_MB[rule_choice[i, t]] += alpha_MB[i] * PE_MB;
+          Q_MF[resp_choice[i, t]] += alpha_MF[i] * PE_MF;
+          
+          // Apply decay to all values
+          Q_MB *= gamma[i];
+          Q_MF *= gamma[i];
+        }
+      }
+    }
+  }
+}
+generated quantities {
+  // Group-level means
+  real<lower=0, upper=1> mu_alpha_MB = inv_logit(mu_pr[1]);
+  real<lower=0, upper=1> mu_alpha_MF = inv_logit(mu_pr[2]);
+  real<lower=0, upper=1> mu_gamma = inv_logit(mu_pr[3]);
+  real<lower=0> mu_inv_temp = exp(mu_pr[4]);
+  
+  // Log likelihood for model comparison
+  array[N] real log_lik;
+  
+  // Posterior predictions
+  array[N, T] int y_pred;
+  
+  // Initialize predictions to invalid value
+  for (i in 1 : N) {
+    log_lik[i] = 0;
+    for (t in 1 : T) {
+      y_pred[i, t] = -1;
+    }
+  }
+  
+  // Calculate log likelihood and posterior predictions
+  for (i in 1 : N) {
+    vector[4] Q_total;
+    vector[3] Q_MB;
+    vector[4] Q_MF;
+    
+    // Initialize Q-values
+    Q_MB = rep_vector(0.0, 3);
+    Q_MF = rep_vector(0.0, 4);
+    
+    for (t in 1 : Tsubj[i]) {
+      if (resp_choice[i, t] > 0) {
+        // Map Q-values to response options
+        Q_total = rep_vector(-10.0, 4);
+        
+        if (resp_color[i, t] > 0) 
+          Q_total[resp_color[i, t]] = 0.0;
+        if (resp_shape[i, t] > 0) 
+          Q_total[resp_shape[i, t]] = 0.0;
+        if (resp_number[i, t] > 0) 
+          Q_total[resp_number[i, t]] = 0.0;
+        
+        if (resp_color[i, t] > 0) 
+          Q_total[resp_color[i, t]] += w[i] * Q_MB[1];
+        if (resp_shape[i, t] > 0) 
+          Q_total[resp_shape[i, t]] += w[i] * Q_MB[2];
+        if (resp_number[i, t] > 0) 
+          Q_total[resp_number[i, t]] += w[i] * Q_MB[3];
+        
+        Q_total += (1 - w[i]) * Q_MF;
+        
+        // Calculate choice probabilities
+        vector[4] probs = softmax(inv_temp[i] * Q_total);
+        
+        // Log likelihood
+        log_lik[i] += categorical_lpmf(resp_choice[i, t] | probs);
+        
+        // Generate prediction
+        y_pred[i, t] = categorical_rng(probs);
+        
+        // Get reward
+        real outcome = rew[i, t] + los[i, t];
+        
+        // Calculate prediction errors
+        real PE_MB = outcome - Q_MB[rule_choice[i, t]];
+        real PE_MF = outcome - Q_MF[resp_choice[i, t]];
+        
+        // Update Q-values
+        Q_MB[rule_choice[i, t]] += alpha_MB[i] * PE_MB;
+        Q_MF[resp_choice[i, t]] += alpha_MF[i] * PE_MF;
+        
+        // Apply decay
+        Q_MB *= gamma[i];
+        Q_MF *= gamma[i];
+      }
+    }
+  }
+}

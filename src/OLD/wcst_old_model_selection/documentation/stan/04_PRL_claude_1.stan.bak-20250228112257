@@ -1,0 +1,245 @@
+// Wisconsin Card Sorting Task Rule Switching Model
+// Focuses on explicit rule representation and switching rather than RL framework
+data {
+  int<lower=1> N; // Number of subjects
+  int<lower=1> T; // Maximum number of trials
+  array[N] int<lower=1, upper=T> Tsubj; // Trials per subject
+  array[N] int<lower=0, upper=1> holdout; // Holdout indicator
+  
+  array[N, T] real rew; // Reward values (1 for correct)
+  array[N, T] real los; // Loss values (-1 for incorrect)
+  
+  array[N, T] int rule_choice; // Correct rule (1=color, 2=shape, 3=number)
+  array[N, T] int resp_choice; // Subject's card choice (1-4)
+  
+  array[N, T] int resp_color; // Card matching color dimension
+  array[N, T] int resp_shape; // Card matching shape dimension
+  array[N, T] int resp_number; // Card matching number dimension
+}
+parameters {
+  // Group-level parameters
+  real<lower=0, upper=1> mu_p_switch; // Mean probability of switching after error
+  real<lower=0, upper=1> mu_p_stay; // Mean probability of staying after success
+  real<lower=0> mu_beta; // Mean decision noise
+  
+  real<lower=0> sigma_p_switch; // SD of switch probability
+  real<lower=0> sigma_p_stay; // SD of stay probability
+  real<lower=0> sigma_beta; // SD of decision noise
+  
+  // Subject-level parameters (with logit/log transformations)
+  vector[N] p_switch_logit; // Logit of switch probability
+  vector[N] p_stay_logit; // Logit of stay probability
+  vector[N] beta_log; // Log of decision noise
+  
+  // Initial rule belief parameters
+  simplex[3] mu_rule_prior; // Group mean initial rule beliefs
+  real<lower=0> kappa_rule_prior; // Concentration parameter
+  array[N] simplex[3] rule_prior; // Subject-specific initial rule beliefs
+}
+transformed parameters {
+  // Transform parameters to constrained scales
+  vector<lower=0, upper=1>[N] p_switch; // Probability of switching after error
+  vector<lower=0, upper=1>[N] p_stay; // Probability of staying after success
+  vector<lower=0>[N] beta; // Decision noise
+  
+  for (i in 1 : N) {
+    p_switch[i] = inv_logit(p_switch_logit[i]);
+    p_stay[i] = inv_logit(p_stay_logit[i]);
+    beta[i] = exp(beta_log[i]);
+  }
+}
+model {
+  // Priors for group-level parameters
+  mu_p_switch ~ beta(2, 2); // Prior centered at 0.5
+  mu_p_stay ~ beta(4, 1); // Prior favoring staying after success
+  mu_beta ~ normal(2, 1); // Prior for decision noise
+  
+  sigma_p_switch ~ normal(0, 0.5); // Half-normal prior
+  sigma_p_stay ~ normal(0, 0.5); // Half-normal prior
+  sigma_beta ~ normal(0, 0.5); // Half-normal prior
+  
+  // Priors for initial rule beliefs
+  mu_rule_prior ~ dirichlet(rep_vector(2.0, 3)); // Weak prior
+  kappa_rule_prior ~ gamma(2, 0.5); // Shape, rate parameterization
+  
+  // Subject-level priors
+  p_switch_logit ~ normal(logit(mu_p_switch), sigma_p_switch);
+  p_stay_logit ~ normal(logit(mu_p_stay), sigma_p_stay);
+  beta_log ~ normal(log(mu_beta), sigma_beta);
+  
+  for (i in 1 : N) {
+    rule_prior[i] ~ dirichlet(kappa_rule_prior * mu_rule_prior);
+  }
+  
+  // Likelihood
+  for (i in 1 : N) {
+    if (holdout[i] == 0) {
+      // Belief state variables
+      vector[3] rule_belief = rule_prior[i]; // Belief about which rule is active
+      int current_rule = 0; // Most likely rule (0 = undecided)
+      real max_belief = 0; // Strength of strongest belief
+      
+      for (t in 1 : Tsubj[i]) {
+        if (resp_choice[i, t] > 0) {
+          // Skip missing data
+          // Determine current believed rule
+          max_belief = max(rule_belief);
+          current_rule = 0;
+          
+          for (r in 1 : 3) {
+            if (rule_belief[r] == max_belief) {
+              current_rule = r;
+              break;
+            }
+          }
+          
+          // If no rule clearly dominates, use softmax over rules
+          vector[4] choice_probs = rep_vector(0.001, 4); // Small baseline probability
+          
+          // Calculate choice probabilities based on rule beliefs
+          for (r in 1 : 3) {
+            real rule_weight = rule_belief[r];
+            
+            // Add probability contribution from each potential rule
+            if (r == 1 && resp_color[i, t] > 0) {
+              // Color rule
+              choice_probs[resp_color[i, t]] += rule_weight;
+            }
+            if (r == 2 && resp_shape[i, t] > 0) {
+              // Shape rule
+              choice_probs[resp_shape[i, t]] += rule_weight;
+            }
+            if (r == 3 && resp_number[i, t] > 0) {
+              // Number rule
+              choice_probs[resp_number[i, t]] += rule_weight;
+            }
+          }
+          
+          // Apply softmax decision rule
+          choice_probs = softmax(beta[i] * log(choice_probs));
+          
+          // Calculate likelihood of observed choice
+          target += categorical_lpmf(resp_choice[i, t] | choice_probs);
+          
+          // Update rule beliefs based on feedback
+          real outcome = rew[i, t] + los[i, t];
+          
+          if (outcome > 0) {
+            // Correct response
+            // Strengthen belief in correct rule
+            rule_belief[rule_choice[i, t]] *= p_stay[i];
+            
+            // Normalize beliefs to sum to 1
+            rule_belief = rule_belief / sum(rule_belief);
+          } else {
+            // Incorrect response
+            // Decrease belief in current rule and redistribute
+            if (current_rule > 0) {
+              rule_belief[current_rule] *= (1 - p_switch[i]);
+              
+              // Redistribute removed probability to other rules
+              real remaining_prob = 1 - sum(rule_belief);
+              vector[3] other_rules = rep_vector(0.0, 3);
+              
+              for (r in 1 : 3) {
+                if (r != current_rule) 
+                  other_rules[r] = 1.0;
+              }
+              
+              rule_belief += (other_rules / sum(other_rules))
+                             * remaining_prob;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+generated quantities {
+  // Log likelihood for model comparison
+  array[N] real log_lik;
+  
+  // Posterior predictions
+  array[N, T] int y_pred;
+  
+  // Initialize
+  for (i in 1 : N) {
+    log_lik[i] = 0;
+    for (t in 1 : T) {
+      y_pred[i, t] = -1;
+    }
+  }
+  
+  // Calculate log likelihood and posterior predictions
+  for (i in 1 : N) {
+    // Belief state variables
+    vector[3] rule_belief = rule_prior[i];
+    int current_rule = 0;
+    real max_belief = 0;
+    
+    for (t in 1 : Tsubj[i]) {
+      if (resp_choice[i, t] > 0) {
+        // Determine current believed rule
+        max_belief = max(rule_belief);
+        current_rule = 0;
+        
+        for (r in 1 : 3) {
+          if (rule_belief[r] == max_belief) {
+            current_rule = r;
+            break;
+          }
+        }
+        
+        // Calculate choice probabilities
+        vector[4] choice_probs = rep_vector(0.001, 4);
+        
+        for (r in 1 : 3) {
+          real rule_weight = rule_belief[r];
+          
+          if (r == 1 && resp_color[i, t] > 0) {
+            choice_probs[resp_color[i, t]] += rule_weight;
+          }
+          if (r == 2 && resp_shape[i, t] > 0) {
+            choice_probs[resp_shape[i, t]] += rule_weight;
+          }
+          if (r == 3 && resp_number[i, t] > 0) {
+            choice_probs[resp_number[i, t]] += rule_weight;
+          }
+        }
+        
+        // Apply softmax
+        choice_probs = softmax(beta[i] * log(choice_probs));
+        
+        // Log likelihood
+        log_lik[i] += categorical_lpmf(resp_choice[i, t] | choice_probs);
+        
+        // Generate prediction
+        y_pred[i, t] = categorical_rng(choice_probs);
+        
+        // Update rule beliefs
+        real outcome = rew[i, t] + los[i, t];
+        
+        if (outcome > 0) {
+          // Correct
+          rule_belief[rule_choice[i, t]] *= p_stay[i];
+          rule_belief = rule_belief / sum(rule_belief);
+        } else {
+          // Incorrect
+          if (current_rule > 0) {
+            rule_belief[current_rule] *= (1 - p_switch[i]);
+            
+            real remaining_prob = 1 - sum(rule_belief);
+            vector[3] other_rules = rep_vector(0.0, 3);
+            
+            for (r in 1 : 3) {
+              if (r != current_rule) 
+                other_rules[r] = 1.0;
+            }
+            
+            rule_belief += (other_rules / sum(other_rules)) * remaining_prob;
+          }
+        }
+      }
+    }
+  }
+}
